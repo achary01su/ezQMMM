@@ -1,0 +1,51 @@
+#Add input parameters here
+
+# Add the useful script path
+ToolScriptPath = /home/acclab-1/software/acclab-codes/useful-tcl-codes/ACompChemLab-tclScripts.tcl
+
+# Charge in the QM region
+# Default value of 0 will be used if not specified
+Charge = 0
+
+# Multiplicity of the QM region
+# Default value of 1 will be used if not specified
+Multiplicity = 1
+
+# Output file directory
+OutputDir = /media/datadrive/acclab-1/Work/redox-potential/phenol/SemiEmMM-sampling/neu-phenol-sampling/QMMM/neu_phen_qmmm
+
+# QChem input file prefix
+OutputPrefix = neu_phen
+
+# rem section of QM calculation
+QChemRemFile = rem_neu_phen_qmmm.txt
+
+# psf file
+PSFfile = ../../../build/phen_wb.psf 
+
+
+#Number of DCD files for one simulation
+NumDCDs = 2
+
+## dcd files from simulations
+## list DCDfile$i with with increasing the value of $i
+## For example; we must define DCDfile1 and DCDfile2 if using two dcd files 
+DCDfile1 = ../prod-run/prod1_SemiEm-MM_neu_phen_r1.dcd 
+DCDfile2 = ../prod-run/prod1_SemiEm-MM_neu_phen_r2.dcd
+
+# Starting frame
+# Defalt values: FirstFrame = 0 and LastFrame = -1
+FirstFrame = 0
+LastFrame = -1
+
+# Integration timestep (in fs) used in simulation
+TimeStep = 0.5 
+
+# Writing frequency for the DCD file used in simulation
+FrameFreq = 10.0
+
+# Stride for loading DCD. Must be an integer
+STEPsize = 5000
+
+#Define QM region
+QM1 = {resname PHN}

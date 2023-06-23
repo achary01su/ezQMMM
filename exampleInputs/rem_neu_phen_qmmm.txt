@@ -1,0 +1,17 @@
+$comment
+Sampling method: Semi empirical PM3
+Surface: Neutral phenol
+State: Neutral phenol (0 1)
+$end
+
+
+$rem
+   JOBTYPE = SP
+   BASIS  =  aug-cc-pcVDZ
+   INCFOCK = FALSE
+   METHOD  =  wB97XV
+   SCF_ALGORITHM  =  DIIS_GDM
+   SCF_CONVERGENCE  =  6
+   SCF_MAX_CYCLES  =  150
+   THRESH = 14
+$end
