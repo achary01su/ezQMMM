@@ -8,7 +8,7 @@ trajectories. Supports **Q-Chem** and **ORCA**.
 
 ```bash
 # Clone and install as a package (recommended)
-git clone <>
+git clone https://github.com/achary01su/ezQMMM.git
 cd ezQMMM
 pip install -e .
 ```
