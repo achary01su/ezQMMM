@@ -1,6 +1,7 @@
 # ezQMMM 2.0 
 Generates QM/MM single-point calculation input files from CHARMM/NAMD MD
-trajectories. Supports **Q-Chem** and **ORCA**.
+trajectories. Supports **Q-Chem** and **ORCA**. 
+**Psi4** support will come soon when adequatly tested.
 
 ---
 

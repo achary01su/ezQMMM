@@ -2,7 +2,7 @@
 """
 ezQMMM 2.0
 Generates QM/MM single point calculation input files from MD trajectories
-Supports: ORCA, Q-Chem, and Psi4
+Supports: Q-Chem and ORCA
 
 Requirements:
     pip install MDAnalysis numpy pyyaml
@@ -933,7 +933,7 @@ class QMMMGenerator:
         prefix     = config.get('output_prefix', 'qmmm')
 
         if 'program' not in config:
-            raise ValueError("'program' required (orca/qchem/psi4)")
+            raise ValueError("'program' required (orca/qchem)")
 
         valid_schemes = {'RCD', 'CS', 'Z1', 'Z2', 'Z3', 'NONE'}
         if bscheme not in valid_schemes:
