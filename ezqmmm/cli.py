@@ -1,12 +1,12 @@
 """Command-line interface for ezQMMM 2.0."""
 
 import sys
-import yaml
 import traceback
+
+import yaml
 
 from ezqmmm.config import create_example_config
 from ezqmmm.generator import QMMMGenerator
-
 
 LOGO = r"""
 --------------------------------------------------------
@@ -16,7 +16,7 @@ LOGO = r"""
  |  __/ / /  | |_| | |  | | |  | | |  | |  / __/ _| |_| |
   \___|/___|  \__\_\_|  |_|_|  |_|_|  |_| |_____(_)\___/
              Easy QM/MM Input File Generator
-                     Q-Chem · Orca 
+                     Q-Chem · Orca
 --------------------------------------------------------
 """
 

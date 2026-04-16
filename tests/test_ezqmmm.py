@@ -26,41 +26,43 @@ Fixture: a tiny 4-residue system built programmatically —
 
 import os
 import sys
-import tempfile
 import warnings
 from pathlib import Path
 
+import MDAnalysis as mda
 import numpy as np
 import pytest
 import yaml
-
-import MDAnalysis as mda
 from MDAnalysis.analysis import distances
 
 # Import both the monolith and the package
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Package imports
-from ezqmmm.models import ChargeMod, SwitchRecord
-from ezqmmm.config import parse_axes, parse_pdb_stride, validate_config, create_example_config
-from ezqmmm.elements import MASS_TO_ELEMENT, get_element_from_mass
-from ezqmmm.geometry import (
-    remap_position, remap_positions_array,
-    remap_positions_by_residue, image_shells, tile_images,
-)
-from ezqmmm.switching import apply_switching
-from ezqmmm.boundary import (
-    find_boundary_bonds, place_link_atom, get_bonded_atoms,
-    apply_boundary_scheme, build_charge_mods,
-)
-from ezqmmm.writers import (
-    write_orca, write_qchem, write_psi4,
-    write_boundary_log, write_switching_log,
-)
-
 # Also import monolith for parity checks
 import ezQMMM2 as mono
-
+from ezqmmm.boundary import (
+    apply_boundary_scheme,
+    find_boundary_bonds,
+    place_link_atom,
+)
+from ezqmmm.config import create_example_config, parse_axes, parse_pdb_stride, validate_config
+from ezqmmm.elements import MASS_TO_ELEMENT, get_element_from_mass
+from ezqmmm.geometry import (
+    image_shells,
+    remap_position,
+    remap_positions_array,
+    remap_positions_by_residue,
+)
+from ezqmmm.models import ChargeMod, SwitchRecord
+from ezqmmm.switching import apply_switching
+from ezqmmm.writers import (
+    write_boundary_log,
+    write_orca,
+    write_psi4,
+    write_qchem,
+    write_switching_log,
+)
 
 # ===================================================================
 # Fixtures
@@ -836,7 +838,7 @@ class TestSwitchRecord:
 class TestNeutralizationWarning:
     def test_no_warning_when_on_target(self):
         """No warning if charge matches target."""
-        with warnings.catch_warnings(record=True) as w:
+        with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             # Simulate: charges already sum to target
             # The sanity check fires when deviation > 0.01

@@ -7,25 +7,28 @@ MDAnalysis Universe and coordinates the per-frame pipeline.
 """
 
 import warnings
-import numpy as np
-import MDAnalysis as mda
-from MDAnalysis.analysis import distances
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
-from ezqmmm.models import ChargeMod, SwitchRecord
+import MDAnalysis as mda
+import numpy as np
+from MDAnalysis.analysis import distances
+
+from ezqmmm import writers
+from ezqmmm.boundary import (
+    apply_boundary_scheme,
+    build_charge_mods,
+    find_boundary_bonds,
+    place_link_atom,
+)
 from ezqmmm.config import parse_axes, parse_pdb_stride, validate_config
 from ezqmmm.elements import get_element_from_mass
 from ezqmmm.geometry import (
-    remap_position, remap_positions_array,
-    image_shells, tile_images,
+    image_shells,
+    tile_images,
 )
-from ezqmmm.boundary import (
-    find_boundary_bonds, place_link_atom,
-    apply_boundary_scheme, build_charge_mods,
-)
+from ezqmmm.models import ChargeMod, SwitchRecord
 from ezqmmm.switching import apply_switching
-from ezqmmm import writers
 
 
 class QMMMGenerator:
@@ -40,7 +43,7 @@ class QMMMGenerator:
         print(f"  Frames: {len(self.universe.trajectory)}")
 
         # Cache PSF charges — topology reference
-        self._psf_charges: Dict[int, float] = {
+        self._psf_charges: dict[int, float] = {
             atom.index: float(atom.charge) for atom in self.universe.atoms
         }
 
@@ -84,7 +87,7 @@ class QMMMGenerator:
     def extract_point_charges(self, qm_selection: str, cutoff: float,
                               frame: int, boundary_scheme: str,
                               switchdist: Optional[float] = None,
-                              expand: Tuple[bool, bool, bool] = (False, False, False),
+                              expand: tuple[bool, bool, bool] = (False, False, False),
                               target_mm_charge: float = 0.0,
                               neutralize: bool = True,
                               neutralization_shell_fraction: float = 0.1):
@@ -211,17 +214,17 @@ class QMMMGenerator:
     # Main generate loop
     # ------------------------------------------------------------------
 
-    def generate(self, config: Dict):
+    def generate(self, config: dict):
         """Run the full QM/MM input generation pipeline."""
         # --- Parse config ---
         qm_sel = config['qm_selection']
         mm_cutoff = config.get('mm_cutoff', 40.0)
-        mm_switchdist = config.get('mm_switchdist', None)
+        mm_switchdist = config.get('mm_switchdist')
         expand = parse_axes(config.get('supercell_axes', []))
         supercell_on = any(expand)
         neutralize_mm = config.get('neutralize_mm_charge', True)
         target_mm_charge = config.get('target_mm_charge', 0.0)
-        pdb_stride = parse_pdb_stride(config.get('pdb_stride', None))
+        pdb_stride = parse_pdb_stride(config.get('pdb_stride'))
         neutral_frac = config.get('neutralization_shell_fraction', 0.1)
 
         first = config.get('first_frame', 0)
@@ -266,7 +269,8 @@ class QMMMGenerator:
 
         # Open run log — mirrors console output to a file
         log_path = output_dir / f"{prefix}_run.log"
-        log_fh = open(log_path, 'w')
+        #tell ruff to ignore the open() block error
+        log_fh = open(log_path, 'w') # noqa: SIM115
 
         def log(msg=''):
             """Print to console and write to log file."""
@@ -275,7 +279,7 @@ class QMMMGenerator:
 
         # --- Print settings ---
         frames = list(range(first, last + 1, stride))
-        log(f"\nSettings:")
+        log("\nSettings:")
         log(f"  Program     : {program.upper()}")
         log(f"  QM          : {method}/{basis}  charge={charge}  mult={mult}")
         log(f"  Boundary    : {bscheme}")
@@ -283,7 +287,7 @@ class QMMMGenerator:
         if mm_switchdist is not None:
             log(f"  Switching   : {mm_switchdist} Ang -> {mm_cutoff} Ang")
         else:
-            log(f"  Switching   : disabled")
+            log("  Switching   : disabled")
         if supercell_on:
             self.universe.trajectory[first]
             box = self.universe.dimensions
@@ -297,7 +301,7 @@ class QMMMGenerator:
             log(f"  MM charge   : neutralized to {target_mm_charge:+.4f} e "
                 f"(outermost {neutral_frac*100:.0f}% of charges adjusted)")
         else:
-            log(f"  MM charge   : no neutralization (raw PSF charges used)")
+            log("  MM charge   : no neutralization (raw PSF charges used)")
         if pdb_stride:
             log(f"  PDB/PSF     : every {pdb_stride} frame(s)")
             psf_dest = writers.write_topology(config['psf_file'], output_dir, prefix)
@@ -306,8 +310,8 @@ class QMMMGenerator:
         log(f"  Log file    : {log_path}")
 
         # --- Frame loop ---
-        all_mods: List[ChargeMod] = []
-        all_switch: List[SwitchRecord] = []
+        all_mods: list[ChargeMod] = []
+        all_switch: list[SwitchRecord] = []
         generated = []
 
         # Charge tracking across frames
@@ -363,7 +367,7 @@ class QMMMGenerator:
                                         mm_ag, base, qm_center, box)
 
         # --- Charge summary ---
-        log(f"\nCharge summary:")
+        log("\nCharge summary:")
         qm_arr = np.array(qm_charges_per_frame)
         mm_arr = np.array(mm_charges_per_frame)
         log(f"  QM PSF charge  :  mean={qm_arr.mean():+.4f}  "

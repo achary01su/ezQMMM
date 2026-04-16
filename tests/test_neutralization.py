@@ -1,14 +1,10 @@
 """Tests for charge neutralization — tested through the package API."""
 
 import warnings
+
 import numpy as np
-import pytest
-import MDAnalysis as mda
-from MDAnalysis.analysis import distances
 
 from ezqmmm.generator import QMMMGenerator
-from ezqmmm.boundary import find_boundary_bonds, apply_boundary_scheme
-from ezqmmm.switching import apply_switching
 
 
 def _build_generator(universe):

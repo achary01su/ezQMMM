@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ezQMMM 2.0 
+ezQMMM 2.0
 Generates QM/MM single point calculation input files from MD trajectories
 Supports: ORCA, Q-Chem, and Psi4
 
@@ -18,15 +18,15 @@ References:
 """
 
 import shutil
+import sys
 import warnings
+from pathlib import Path
+from typing import Optional
+
 import MDAnalysis as mda
-from MDAnalysis.analysis import distances
 import numpy as np
 import yaml
-import sys
-from pathlib import Path
-from typing import List, Dict, Optional, Tuple
-
+from MDAnalysis.analysis import distances
 
 # Data records
 # ---------------------------------------------------------------------------
@@ -106,7 +106,7 @@ class QMMMGenerator:
         print(f"  Frames: {len(self.universe.trajectory)}")
 
         # Cache PSF charges before any frame is loaded — topology reference
-        self._psf_charges: Dict[int, float] = {
+        self._psf_charges: dict[int, float] = {
             atom.index: float(atom.charge) for atom in self.universe.atoms
         }
 
@@ -140,7 +140,7 @@ class QMMMGenerator:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _parse_axes(axes_config) -> Tuple[bool, bool, bool]:
+    def _parse_axes(axes_config) -> tuple[bool, bool, bool]:
         """
         Parse supercell_axes config into (expand_x, expand_y, expand_z).
         Accepts a list or comma-separated string: x/a, y/b, z/c.
@@ -178,11 +178,14 @@ class QMMMGenerator:
             return mapping[v]
         try:
             return int(v)
-        except ValueError:
+        # removed lint error
+        #except ValueError:
+        #    raise ValueError(
+        except ValueError as e:
             raise ValueError(
                 f"pdb_stride '{value}' not recognised. "
                 f"Use: all, half, tenth, or an integer."
-            )
+            ) from e
 
     # -----------------------------------------------------------
     # Coordinate / link-atom extraction
@@ -295,7 +298,7 @@ class QMMMGenerator:
     # -------------------------------------------------------------------------
 
     def _image_shells(self, cutoff: float, box: np.ndarray,
-                      expand: Tuple[bool, bool, bool]) -> Tuple[int, int, int]:
+                      expand: tuple[bool, bool, bool]) -> tuple[int, int, int]:
         """
         Number of image shells per axis: ceil(cutoff / L) for active axes,
         0 for suppressed axes.
@@ -307,8 +310,8 @@ class QMMMGenerator:
 
     def _tile_images(self, charges: list, qm_pos: np.ndarray,
                      cutoff: float, box: np.ndarray,
-                     expand: Tuple[bool, bool, bool]
-                     ) -> Tuple[list, Tuple[int, int, int], int]:
+                     expand: tuple[bool, bool, bool]
+                     ) -> tuple[list, tuple[int, int, int], int]:
         """
         Generate periodic images of primary charges along requested axes.
         Primary charges must already be remapped to minimum image positions
@@ -354,7 +357,7 @@ class QMMMGenerator:
     def extract_point_charges(self, qm_selection: str, cutoff: float,
                                frame: int, boundary_scheme: str,
                                switchdist: Optional[float] = None,
-                               expand: Tuple[bool, bool, bool] = (False, False, False),
+                               expand: tuple[bool, bool, bool] = (False, False, False),
                                target_mm_charge: float = 0.0,
                                neutralize: bool = True,
                                neutralization_shell_fraction: float = 0.1):
@@ -488,7 +491,7 @@ class QMMMGenerator:
     # -----------------------------------------------
 
     def _find_boundary_bonds(self, qm_atoms):
-        """Return list of (qm_atom_idx, mm_atom_idx) 
+        """Return list of (qm_atom_idx, mm_atom_idx)
            pairs at the QM/MM boundary."""
         qm_idx = set(qm_atoms.indices)
         boundary = []
@@ -591,7 +594,7 @@ class QMMMGenerator:
         removed_atoms    = set()
         charge_mods      = []
 
-        for qm_idx, mm1_idx in boundary_bonds:
+        for _qm_idx, mm1_idx in boundary_bonds:
             if mm1_idx not in atom_map:
                 continue
 
@@ -734,7 +737,7 @@ class QMMMGenerator:
 
     def _build_charge_mods(self, raw_mods: list, frame: int,
                            qm_center: np.ndarray,
-                           box: np.ndarray) -> List[ChargeMod]:
+                           box: np.ndarray) -> list[ChargeMod]:
         """Convert raw boundary scheme dicts to typed ChargeMod records."""
         out = []
         for d in raw_mods:
@@ -821,7 +824,7 @@ class QMMMGenerator:
     # Log writers
     # ------------------------------------------------------------------
 
-    def _write_boundary_log(self, fh, all_mods: List[ChargeMod]):
+    def _write_boundary_log(self, fh, all_mods: list[ChargeMod]):
         fh.write("=" * 72 + "\n")
         fh.write("ezQMMM 2.0  Boundary Charge Modification Detail\n")
         fh.write("=" * 72 + "\n\n")
@@ -846,9 +849,9 @@ class QMMMGenerator:
         fh.write(f"Total: removed={n_rem}  modified={n_mod}  "
                  f"virtual={n_vir}  total={len(all_mods)}\n")
 
-    def _write_switching_log(self, fh, all_switch: List[SwitchRecord],
+    def _write_switching_log(self, fh, all_switch: list[SwitchRecord],
                              switchdist: float, cutoff: float,
-                             expand: Tuple[bool, bool, bool]):
+                             expand: tuple[bool, bool, bool]):
         supercell_on = any(expand)
         axis_labels  = ','.join(l for l, e in zip(('x', 'y', 'z'), expand) if e)
         sw_label = f"{switchdist:.2f} - {cutoff:.2f} Ang" \
@@ -856,9 +859,9 @@ class QMMMGenerator:
         fh.write("=" * 72 + "\n")
         fh.write("ezQMMM 2.0  Switching-Function Charge Modifications\n")
         fh.write(f"  Switching zone  : {sw_label}\n")
-        fh.write(f"  Function        : quintic (NAMD-style)\n")
-        fh.write(f"  Distance metric : minimum distance to any QM atom "
-                 f"(not center of mass)\n")
+        fh.write("  Function        : quintic (NAMD-style)\n")
+        fh.write("  Distance metric : minimum distance to any QM atom "
+                 "(not center of mass)\n")
         if supercell_on:
             fh.write(f"  Image charges   : included (axes: {axis_labels}); "
                      f"marked in Src column as IMG\n")
@@ -901,17 +904,17 @@ class QMMMGenerator:
     # Main generate loop
     # ------------------------------------------------------------------
 
-    def generate(self, config: Dict):
+    def generate(self, config: dict):
         qm_sel        = config['qm_selection']
         mm_cutoff     = config.get('mm_cutoff', 40.0)
         # Switching is disabled by default. Set mm_switchdist explicitly
         # in the config to enable it. If null or absent, no switching is applied.
-        mm_switchdist = config.get('mm_switchdist', None)
+        mm_switchdist = config.get('mm_switchdist')
         expand        = self._parse_axes(config.get('supercell_axes', []))
         supercell_on  = any(expand)
         neutralize_mm   = config.get('neutralize_mm_charge', True)
         target_mm_charge = config.get('target_mm_charge', 0.0)
-        pdb_stride       = self._parse_pdb_stride(config.get('pdb_stride', None))
+        pdb_stride       = self._parse_pdb_stride(config.get('pdb_stride'))
         neutral_frac     = config.get('neutralization_shell_fraction', 0.1)
 
         first  = config.get('first_frame', 0)
@@ -1008,7 +1011,8 @@ class QMMMGenerator:
 
         # Open run log — mirrors console output to a file
         log_path = output_dir / f"{prefix}_run.log"
-        log_fh = open(log_path, 'w')
+        #tell ruff to ignore the open() block error
+        log_fh = open(log_path, 'w') # noqa: SIM115
 
         def log(msg=''):
             """Print to console and write to log file."""
@@ -1016,7 +1020,7 @@ class QMMMGenerator:
             log_fh.write(msg + '\n')
 
         frames = list(range(first, last + 1, stride))
-        log(f"\nSettings:")
+        log("\nSettings:")
         log(f"  Program     : {program.upper()}")
         log(f"  QM          : {method}/{basis}  charge={charge}  mult={mult}")
         log(f"  Boundary    : {bscheme}")
@@ -1024,7 +1028,7 @@ class QMMMGenerator:
         if mm_switchdist is not None:
             log(f"  Switching   : {mm_switchdist} Ang -> {mm_cutoff} Ang")
         else:
-            log(f"  Switching   : disabled")
+            log("  Switching   : disabled")
         if supercell_on:
             self.universe.trajectory[first]
             box = self.universe.dimensions
@@ -1038,7 +1042,7 @@ class QMMMGenerator:
             log(f"  MM charge   : neutralized to {target_mm_charge:+.4f} e "
                 f"(outermost {neutral_frac*100:.0f}% of charges adjusted)")
         else:
-            log(f"  MM charge   : no neutralization (raw PSF charges used)")
+            log("  MM charge   : no neutralization (raw PSF charges used)")
         if pdb_stride:
             log(f"  PDB/PSF     : every {pdb_stride} frame(s)")
             psf_dest = self._write_topology(config['psf_file'], output_dir, prefix)
@@ -1046,8 +1050,8 @@ class QMMMGenerator:
         log(f"  Frames      : {len(frames)}")
         log(f"  Log file    : {log_path}")
 
-        all_mods:   List[ChargeMod]    = []
-        all_switch: List[SwitchRecord] = []
+        all_mods:   list[ChargeMod]    = []
+        all_switch: list[SwitchRecord] = []
         generated = []
 
         # Charge tracking across frames
@@ -1106,7 +1110,7 @@ class QMMMGenerator:
                                       qm_center, box)
 
         # Charge summary
-        log(f"\nCharge summary:")
+        log("\nCharge summary:")
         qm_arr = np.array(qm_charges_per_frame)
         mm_arr = np.array(mm_charges_per_frame)
         log(f"  QM PSF charge  :  mean={qm_arr.mean():+.4f}  "
@@ -1295,7 +1299,7 @@ LOGO = r"""
  |  __/ / /  | |_| | |  | | |  | | |  | |  / __/ _| |_| |
   \___|/___|  \__\_\_|  |_|_|  |_|_|  |_| |_____(_)\___/
              Easy QM/MM Input File Generator
-                     Q-Chem · Orca 
+                     Q-Chem · Orca
 --------------------------------------------------------
 """
 

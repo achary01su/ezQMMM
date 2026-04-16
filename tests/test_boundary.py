@@ -4,11 +4,12 @@ import numpy as np
 import pytest
 
 from ezqmmm.boundary import (
-    find_boundary_bonds, place_link_atom, get_bonded_atoms,
-    apply_boundary_scheme, build_charge_mods,
+    apply_boundary_scheme,
+    build_charge_mods,
+    find_boundary_bonds,
+    get_bonded_atoms,
+    place_link_atom,
 )
-from ezqmmm.geometry import remap_position
-
 
 # ===================================================================
 # Bond detection
@@ -261,7 +262,7 @@ class TestNONE:
         qm = tiny_universe.select_atoms("resid 1")
         mm = [a for a in tiny_universe.select_atoms("all")
               if a.index not in set(qm.indices)]
-        bonds = find_boundary_bonds(qm)
+        find_boundary_bonds(qm)
         # The generate code checks: if not bonds or scheme == 'NONE'
         # When NONE, it builds raw charges directly. Verify that path:
         charges = [(a.charge, *a.position) for a in mm]

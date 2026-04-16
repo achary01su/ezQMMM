@@ -6,13 +6,12 @@ Each writer is a standalone function — no class state required.
 
 import shutil
 import warnings
-import numpy as np
 from pathlib import Path
-from typing import List, Tuple
 
-from ezqmmm.models import ChargeMod, SwitchRecord
+import numpy as np
+
 from ezqmmm.geometry import remap_positions_by_residue
-
+from ezqmmm.models import ChargeMod, SwitchRecord
 
 # ----------------------------------------------------
 # QM/MM input writers
@@ -161,7 +160,7 @@ def write_topology(psf_source: str, output_dir: Path, prefix: str) -> Path:
 # Log writers
 # ------------------------------------------------------------------
 
-def write_boundary_log(fh, all_mods: List[ChargeMod]):
+def write_boundary_log(fh, all_mods: list[ChargeMod]):
     """Write detailed boundary charge modification log."""
     fh.write("=" * 72 + "\n")
     fh.write("ezQMMM 2.0  Boundary Charge Modification Detail\n")
@@ -188,9 +187,9 @@ def write_boundary_log(fh, all_mods: List[ChargeMod]):
              f"virtual={n_vir}  total={len(all_mods)}\n")
 
 
-def write_switching_log(fh, all_switch: List[SwitchRecord],
+def write_switching_log(fh, all_switch: list[SwitchRecord],
                         switchdist: float, cutoff: float,
-                        expand: Tuple[bool, bool, bool]):
+                        expand: tuple[bool, bool, bool]):
     """Write switching-function charge modification log."""
     supercell_on = any(expand)
     axis_labels = ','.join(l for l, e in zip(('x', 'y', 'z'), expand) if e)
@@ -199,9 +198,9 @@ def write_switching_log(fh, all_switch: List[SwitchRecord],
     fh.write("=" * 72 + "\n")
     fh.write("ezQMMM 2.0  Switching-Function Charge Modifications\n")
     fh.write(f"  Switching zone  : {sw_label}\n")
-    fh.write(f"  Function        : quintic (NAMD-style)\n")
-    fh.write(f"  Distance metric : minimum distance to any QM atom "
-             f"(not center of mass)\n")
+    fh.write("  Function        : quintic (NAMD-style)\n")
+    fh.write("  Distance metric : minimum distance to any QM atom "
+             "(not center of mass)\n")
     if supercell_on:
         fh.write(f"  Image charges   : included (axes: {axis_labels}); "
                  f"marked in Src column as IMG\n")

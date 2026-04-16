@@ -1,7 +1,8 @@
 """Data records for charge modifications and switching events."""
 
-import numpy as np
 from typing import Optional
+
+import numpy as np
 
 
 class ChargeMod:

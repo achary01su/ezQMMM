@@ -1,7 +1,6 @@
 """Tests for ezqmmm.switching — quintic switching function."""
 
 import numpy as np
-import pytest
 
 from ezqmmm.switching import apply_switching
 

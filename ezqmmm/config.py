@@ -1,9 +1,9 @@
 """Configuration parsing, validation, and example generation."""
 
-from typing import Optional, Tuple
+from typing import Optional
 
 
-def parse_axes(axes_config) -> Tuple[bool, bool, bool]:
+def parse_axes(axes_config) -> tuple[bool, bool, bool]:
     """
     Parse supercell_axes config into (expand_x, expand_y, expand_z).
     Accepts a list or comma-separated string: x/a, y/b, z/c.
@@ -41,11 +41,11 @@ def parse_pdb_stride(value) -> Optional[int]:
         return mapping[v]
     try:
         return int(v)
-    except ValueError:
+    except ValueError as e:
         raise ValueError(
             f"pdb_stride '{value}' not recognised. "
             f"Use: all, half, tenth, or an integer."
-        )
+        ) from e
 
 
 def validate_config(config: dict, n_frames: int):
@@ -102,7 +102,7 @@ def validate_config(config: dict, n_frames: int):
 
     # --- Switching window ---
     mm_cutoff = config.get('mm_cutoff', 40.0)
-    mm_switchdist = config.get('mm_switchdist', None)
+    mm_switchdist = config.get('mm_switchdist')
     if mm_switchdist is not None and mm_switchdist >= mm_cutoff:
         raise ValueError(
             f"mm_switchdist ({mm_switchdist}) must be less than "

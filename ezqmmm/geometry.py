@@ -6,10 +6,9 @@ All functions use the floor-based rounding convention
 for consistency with standard MD codes.
 """
 
+
 import numpy as np
 from MDAnalysis.analysis import distances
-from typing import Tuple
-
 
 # Minimum image remapping
 # ------------------------------------------------------------------
@@ -103,7 +102,7 @@ def remap_positions_by_residue(mm_ag, orig_pos: np.ndarray,
 # ------------------------------------------------------------------------
 
 def image_shells(cutoff: float, box: np.ndarray,
-                 expand: Tuple[bool, bool, bool]) -> Tuple[int, int, int]:
+                 expand: tuple[bool, bool, bool]) -> tuple[int, int, int]:
     """
     Number of image shells per axis: ceil(cutoff / L) for active axes,
     0 for suppressed axes.
@@ -116,8 +115,8 @@ def image_shells(cutoff: float, box: np.ndarray,
 
 def tile_images(charges: list, qm_pos: np.ndarray,
                 cutoff: float, box: np.ndarray,
-                expand: Tuple[bool, bool, bool]
-                ) -> Tuple[list, Tuple[int, int, int], int]:
+                expand: tuple[bool, bool, bool]
+                ) -> tuple[list, tuple[int, int, int], int]:
     """
     Generate periodic images of primary charges along requested axes.
     Primary charges must already be remapped to minimum image positions

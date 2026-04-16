@@ -2,13 +2,14 @@
 
 import numpy as np
 import pytest
-from MDAnalysis.analysis import distances
 
 from ezqmmm.geometry import (
-    remap_position, remap_positions_array,
-    remap_positions_by_residue, image_shells, tile_images,
+    image_shells,
+    remap_position,
+    remap_positions_array,
+    remap_positions_by_residue,
+    tile_images,
 )
-
 
 # ===================================================================
 # Minimum image remapping
@@ -193,7 +194,7 @@ class TestTileImages:
         )
         assert len(images) > 0
         # All images should be within cutoff of QM
-        for q, x, y, z in images:
+        for _q, x, y, z in images:
             d = np.linalg.norm(np.array([x, y, z]) - qm_pos[0])
             assert d <= 40.0 + 0.01
 
@@ -220,7 +221,7 @@ class TestTileImages:
         )
         assert shells[1] == 0
         assert shells[2] == 0
-        for _, x, y, z in images:
+        for _, _x, y, z in images:
             # y and z should be identical to primary
             assert abs(y - 50.0) < 1e-6
             assert abs(z - 50.0) < 1e-6

@@ -16,11 +16,11 @@ References:
     Lin & Truhlar, J. Phys. Chem. A 109, 3991-4004 (2005)
 """
 
-import numpy as np
-from typing import Dict, List
 
-from ezqmmm.models import ChargeMod
+import numpy as np
+
 from ezqmmm.geometry import remap_position
+from ezqmmm.models import ChargeMod
 
 
 def find_boundary_bonds(qm_atoms) -> list:
@@ -70,7 +70,7 @@ def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme):
     removed_atoms = set()
     charge_mods = []
 
-    for qm_idx, mm1_idx in boundary_bonds:
+    for _qm_idx, mm1_idx in boundary_bonds:
         if mm1_idx not in atom_map:
             continue
 
@@ -205,7 +205,7 @@ def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme):
 
 def build_charge_mods(raw_mods: list, frame: int,
                       qm_center: np.ndarray, box: np.ndarray,
-                      psf_charges: Dict[int, float]) -> List[ChargeMod]:
+                      psf_charges: dict[int, float]) -> list[ChargeMod]:
     """Convert raw boundary scheme dicts to typed ChargeMod records."""
     out = []
     for d in raw_mods:

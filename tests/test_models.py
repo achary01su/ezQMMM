@@ -1,6 +1,7 @@
 """Tests for ezqmmm.models — ChargeMod and SwitchRecord."""
 
 import numpy as np
+
 from ezqmmm.models import ChargeMod, SwitchRecord
 
 

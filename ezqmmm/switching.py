@@ -8,9 +8,10 @@ S(r) = 0  for r ≥ cut
 Distance r = minimum distance from charge to any QM atom.
 """
 
+from typing import Optional
+
 import numpy as np
 from MDAnalysis.analysis import distances
-from typing import List, Tuple, Optional
 
 from ezqmmm.models import SwitchRecord
 
@@ -19,7 +20,7 @@ def apply_switching(charges: list, qm_pos: np.ndarray,
                     sw: float, cut: float, box,
                     frame: int,
                     n_primary: Optional[int] = None
-                    ) -> Tuple[list, List[SwitchRecord]]:
+                    ) -> tuple[list, list[SwitchRecord]]:
     """
     Vectorised quintic switching on a charge list.
 

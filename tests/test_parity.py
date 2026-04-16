@@ -13,8 +13,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from ezqmmm.writers import write_orca, write_qchem, write_psi4
 import ezQMMM2 as mono
+from ezqmmm.writers import write_orca, write_psi4, write_qchem
 
 
 @pytest.fixture

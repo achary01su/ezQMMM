@@ -6,9 +6,9 @@ straddling_universe: 6-atom system with a water straddling the box boundary.
 outside_cutoff_universe: 12-atom system where residue 4 is genuinely outside cutoff.
 """
 
+import MDAnalysis as mda
 import numpy as np
 import pytest
-import MDAnalysis as mda
 
 
 @pytest.fixture

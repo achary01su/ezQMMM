@@ -1,10 +1,11 @@
 """Tests for ezqmmm.config — parsing and validation."""
 
 import os
+
 import pytest
 import yaml
 
-from ezqmmm.config import parse_axes, parse_pdb_stride, validate_config, create_example_config
+from ezqmmm.config import create_example_config, parse_axes, parse_pdb_stride, validate_config
 
 
 class TestParseAxes:

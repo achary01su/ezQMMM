@@ -1,6 +1,7 @@
 """Tests for ezqmmm.elements — mass-to-element lookup."""
 
 import pytest
+
 from ezqmmm.elements import MASS_TO_ELEMENT, get_element_from_mass
 
 

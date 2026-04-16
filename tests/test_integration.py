@@ -6,14 +6,10 @@ Tests the full chain: QM coordinate extraction → MM charge extraction
 Also tests whole-residue inclusion and the QMMMGenerator public interface.
 """
 
-import os
-import warnings
-import numpy as np
-import pytest
 import MDAnalysis as mda
+import numpy as np
 
 from ezqmmm.generator import QMMMGenerator
-from ezqmmm.elements import get_element_from_mass
 
 
 def _build_generator(universe):

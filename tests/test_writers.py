@@ -1,14 +1,18 @@
 """Tests for ezqmmm.writers — QM/MM input files and log output."""
 
-import numpy as np
-import pytest
 from pathlib import Path
 
-from ezqmmm.writers import (
-    write_orca, write_qchem, write_psi4,
-    write_boundary_log, write_switching_log,
-)
+import numpy as np
+import pytest
+
 from ezqmmm.models import ChargeMod, SwitchRecord
+from ezqmmm.writers import (
+    write_boundary_log,
+    write_orca,
+    write_psi4,
+    write_qchem,
+    write_switching_log,
+)
 
 
 @pytest.fixture
