@@ -862,8 +862,9 @@ class QMMMGenerator:
         if supercell_on:
             fh.write(f"  Image charges   : included (axes: {axis_labels}); "
                      f"marked in Src column as IMG\n")
-        fh.write(f"  Recorded        : only charges with scale < 1 "
-                 f"(dist > {switchdist:.2f} Ang)\n")
+        if switchdist is not None:
+            fh.write(f"  Recorded        : only charges with scale < 1 "
+                     f"(dist > {switchdist:.2f} Ang)\n")
         fh.write("=" * 72 + "\n\n")
 
         src_col = "  Src" if supercell_on else ""
