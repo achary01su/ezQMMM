@@ -265,6 +265,16 @@ class QMMMGenerator:
             )
         print(f"\n  QM selection validated: {len(qm_test)} atoms on frame {first}")
 
+        # Automatic charge suggestion from topology values
+        # This will be only printed on console, not in the log file since the log file is not open yet
+        qm_psf_charge = sum(self._psf_charges.get(a.index, 0.0) for a in qm_test)
+        suggested = round(qm_psf_charge)
+        print(f"  QM charge sum from force field: {qm_psf_charge:+.4f} -> suggested charge: {suggested}")
+        print(f"  Note: Double check your selection in case of non-interger values")
+
+        if suggested != charge:
+            print(f"  WARNING: Config charge ({charge}) differs too much from force field sum ({suggested})")
+
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Open run log — mirrors console output to a file
