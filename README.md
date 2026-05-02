@@ -40,7 +40,7 @@ ezqmmm config.yaml
 ```
 
 Or using the standalone script:
-(Note that the standalone code will not be updated beyond 2.0.1 version) 
+(note that the standalone code will not be updated beyond 2.0.1 version) 
 
 ```bash
 python ezQMMM2.py --example

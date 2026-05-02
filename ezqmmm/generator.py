@@ -31,6 +31,7 @@ from ezqmmm.models import ChargeMod, SwitchRecord
 from ezqmmm.switching import apply_switching
 
 
+
 class QMMMGenerator:
     """Generate QM/MM input files from MD trajectories."""
 
@@ -267,6 +268,7 @@ class QMMMGenerator:
 
         # Automatic charge suggestion from topology values
         # This will be only printed on console, not in the log file since the log file is not open yet
+        # The same raw sum of charges are also printed as summary for each frame 
         qm_psf_charge = sum(self._psf_charges.get(a.index, 0.0) for a in qm_test)
         suggested = round(qm_psf_charge)
         print(f"  QM charge sum from force field: {qm_psf_charge:+.4f} -> suggested charge: {suggested}")
@@ -274,6 +276,24 @@ class QMMMGenerator:
 
         if suggested != charge:
             print(f"  WARNING: Config charge ({charge}) differs too much from force field sum ({suggested})")
+
+        test_bonds = find_boundary_bonds(qm_test)
+
+        if test_bonds:
+            print(f"\n  Boundary bonds ({len(test_bonds)} QM-MM cuts):")
+            for qm_idx, mm_idx in test_bonds:
+                qm_a = self.universe.atoms[qm_idx]
+                mm_a = self.universe.atoms[mm_idx]
+                qm_elem = get_element_from_mass(qm_a.mass)
+                mm_elem = get_element_from_mass(mm_a.mass)
+                print(f"    {qm_a.segid}:{qm_a.resname}{qm_a.resid}:{qm_a.name}"
+                      f" -- {mm_a.segid}:{mm_a.resname}{mm_a.resid}:{mm_a.name}"
+                      f"  ({qm_elem}-{mm_elem})")
+                if qm_elem in ('N', 'O', 'S') or mm_elem in ('N', 'O', 'S'):
+                      print(f"    WARNING: Polar bond cut -- only C-C cuts are tested")
+                      print(f"    WARNING: The input will still be created. The user should be careful before using them")
+        else:
+            print(f"\n  Boundary bonds: none")
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
