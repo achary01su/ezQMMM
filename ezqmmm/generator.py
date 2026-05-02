@@ -29,7 +29,10 @@ from ezqmmm.geometry import (
 )
 from ezqmmm.models import ChargeMod, SwitchRecord
 from ezqmmm.switching import apply_switching
+from ezqmmm import __version__
 
+
+import time
 
 
 class QMMMGenerator:
@@ -217,6 +220,7 @@ class QMMMGenerator:
 
     def generate(self, config: dict):
         """Run the full QM/MM input generation pipeline."""
+        start_time = time.time()
         # --- Parse config ---
         qm_sel = config['qm_selection']
         mm_cutoff = config.get('mm_cutoff', 40.0)
@@ -359,7 +363,9 @@ class QMMMGenerator:
             f"{'mods':>4}  {'switched':>8}"
             + ("  " + "images".rjust(8) if supercell_on else ""))
         log("-" * (76 + (10 if supercell_on else 0)))
-
+        
+        # start the time
+        loop_start = time.time()
         for i, frame in enumerate(frames, 1):
             coords = self.extract_coordinates(qm_sel, frame)
 
@@ -381,9 +387,23 @@ class QMMMGenerator:
 
             img_str = (f"  {img_inf.get('n_images', 0):8d}"
                        if supercell_on else "")
+            # calculate ETA 
+            if i == 1:
+                eta_str = "estimating..."
+            else:
+                elapsed = time.time() - loop_start
+                fps = i / elapsed
+                remaining = (len(frames) - i) / fps
+                if remaining < 60:
+                    eta_str = f"{remaining:.0f}s"
+                elif remaining < 3600:
+                    eta_str = f"{remaining/60:.1f}m"
+                else:
+                    eta_str = f"{remaining/3600:.1f}h"
             log(f"  {frame:5d}  {len(coords):8d}  {len(charges):10d}  "
                 f"{qm_q:+10.4f}  {mm_q:+11.4f}  "
-                f"{len(mods):4d}  {len(sw_recs):8d}{img_str}")
+                f"{len(mods):4d}  {len(sw_recs):8d}{img_str}"
+                f"  ETA: {eta_str}")
 
             base = output_dir / f"{prefix}_frame{frame}"
             suffix, write_fn = writer_fn[program]
@@ -424,5 +444,21 @@ class QMMMGenerator:
         log(f"  Run log       -> {log_path}")
 
         log(f"\nGenerated {len(generated)} input files")
+
+        # Print summary in the log file.
+        elapsed = time.time() - start_time
+        if elapsed < 60:
+            time_str = f"{elapsed:.1f}s"
+        elif elapsed < 3600:
+            time_str = f"{elapsed/60:.1f}m"
+        else:
+            time_str = f"{elapsed/3600:.1f}h"
+
+        log(f"\n  {'='*60}")
+        log(f"  ezQMMM {__version__} | {len(frames)} frames | "
+            f"{program.upper()} | {bscheme} | {method}/{basis}")
+        log(f"  MM charge: {mm_arr.mean():+.4f} e | "
+            f"  Wall time: {time_str} ")
+        log(f"  {'='*60}")
         log_fh.close()
         return generated

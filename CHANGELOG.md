@@ -11,4 +11,5 @@ Charge suggestions.
 Warning for large differences between QM charge and MM charge of the QM region as obtained from the topology.
 QM-MM cuts mentioned while executing
 Warning for polar bond cuts
+Added estimated time and Summary block
 ### Changed
