@@ -82,6 +82,20 @@ def validate_config(config: dict, n_frames: int):
             f"Valid options: {', '.join(sorted(valid_schemes))}"
         )
 
+    # CS-specific parameters
+    if bscheme == 'CS':
+        cs_frac = config.get('cs_bond_fraction', 0.06)
+        if not (0.0 < cs_frac < 0.3):
+            raise ValueError(
+                f"cs_bond_fraction should be in (0, 0.3), got {cs_frac}. "
+                f"NAMD's default is 0.06."
+        )
+    elif 'cs_bond_fraction' in config:
+        # CS parameter set but boundary scheme is not CS: display warning msg 
+        import warnings
+        warnings.warn(
+            f"cs_bond_fraction value will be ignored since boundary_scheme is: '{bscheme}'."
+        )   
     # --- Frame range ---
     first = config.get('first_frame', 0)
     stride = config.get('stride', 1)
@@ -127,7 +141,7 @@ psf_file: system.psf
 dcd_file: trajectory.dcd
 qm_selection: "resid 100 and not backbone"
 mm_cutoff: 40.0
-# mm_switchdist: 35.0   # uncomment to enable switching; disabled by default
+mm_switchdist: 35.0   
 first_frame: 0
 last_frame: 100
 stride: 10
@@ -136,6 +150,10 @@ basis: 6-31G*
 charge: 0
 multiplicity: 1
 boundary_scheme: RCD
+# CS virtual-charge displacement as a fraction of the MM1–MM2 bond length.
+# Default 0.06 matches NAMD
+cs_bond_fraction: 0.06
+
 
 # MM charge neutralization (default: true).
 # Distributes any residual MM charge evenly across all point charges each

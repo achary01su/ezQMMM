@@ -14,6 +14,7 @@ MM3 is bonded to MM2 — consecutive atoms along the covalent bond chain.
 
 References:
     Lin & Truhlar, J. Phys. Chem. A 109, 3991-4004 (2005)
+    Hu & Soderhjelm & Ryde, J. Chem. Theory Comp 7, 761-777 (2011)
 """
 
 
@@ -59,7 +60,8 @@ def get_bonded_atoms(universe, atom_idx: int) -> list:
            if hasattr(atom, 'bonds') else []
 
 
-def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme):
+def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme,
+                          cs_bond_fraction: float = 0.06):
     """
     Apply boundary charge scheme to primary MM atoms.
     Returns (charges, raw_mod_dicts).
@@ -183,11 +185,23 @@ def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme):
                     vn = np.linalg.norm(vec)
                     if vn > 0.1:
                         u = vec / vn
-                        virtual_charges.append((split,  *(mm2_pos - u * 0.3)))
-                        virtual_charges.append((-split, *(mm2_pos + u * 0.3)))
+                        displacement = cs_bond_fraction * vn
+                        pos_plus =  mm2_pos - u * displacement
+                        pos_minus =  mm2_pos + u * displacement
+                        virtual_charges.append((-split, *pos_minus))
+                        virtual_charges.append((split, *pos_plus))
+                        charge_mods.append({
+                           'type': 'virtual', 'position': pos_plus,
+                           'charge': split, 'reason': 'Virtual CS charges (+)',
+                        })
+                        charge_mods.append({
+                           'type': 'virtual', 'position': pos_minus,
+                           'charge': -split, 'reason': 'Virtual CS charges (-)',
+                        })
                     mm2_atom = universe.atoms[mm2_idx]
                     old_q = mm2_atom.charge
-                    modified_charges[mm2_idx] += split
+                    # deposit q/n on MM2 (the charge shift)
+                    modified_charges[mm2_idx] += split  
                     charge_mods.append({
                         'type': 'modified', 'atom': mm2_atom,
                         'old_charge': old_q,

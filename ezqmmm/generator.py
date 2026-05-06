@@ -243,6 +243,9 @@ class QMMMGenerator:
         charge = config.get('charge', 0)
         mult = config.get('multiplicity', 1)
         bscheme = config.get('boundary_scheme', 'RCD').upper()
+        #cs-scaling
+        cs_bond_frac = config.get('cs_bond_fraction', 0.06) if bscheme == 'CS' else None
+
 
         output_dir = Path(config.get('output_dir', '.'))
         prefix = config.get('output_prefix', 'qmmm')
@@ -317,7 +320,10 @@ class QMMMGenerator:
         log(f"  Program     : {program.upper()}")
         log(f"  QM          : {method}/{basis}  charge={charge}  mult={mult}")
         log(f"  Boundary    : {bscheme}")
-        log(f"  MM cutoff   : {mm_cutoff} Ang")
+        if bscheme == 'CS':                                          
+            log(f"  CS bond frac: {cs_bond_frac:.3f}  "              
+            f"(virtual charges at MM2 +/- {cs_bond_frac:.3f} x MM1-MM2 bond length)")  
+            log(f"  MM cutoff   : {mm_cutoff} Ang")
         if mm_switchdist is not None:
             log(f"  Switching   : {mm_switchdist} Ang -> {mm_cutoff} Ang")
         else:
