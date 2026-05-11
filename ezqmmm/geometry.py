@@ -1,9 +1,7 @@
 """
 Minimum-image remapping and supercell image tiling.
 
-All functions use the floor-based rounding convention
-(round-half-up) rather than np.round (banker's rounding)
-for consistency with standard MD codes.
+Uses floor((x - x_ref)/L + 0.5), which is equivalent to round-half-up convention.
 """
 
 
@@ -17,6 +15,9 @@ def remap_position(pos: np.ndarray, qm_center: np.ndarray,
                    box: np.ndarray) -> np.ndarray:
     """
     Remap a single (3,) position to minimum image relative to *qm_center*.
+
+    It must be consitent with inlined remap in generator.extract_point_charges
+    used for QM-input charge positions 
     """
     lx, ly, lz = box[0], box[1], box[2]
     return np.array([
@@ -26,51 +27,77 @@ def remap_position(pos: np.ndarray, qm_center: np.ndarray,
     ])
 
 
-def remap_positions_array(pos: np.ndarray, qm_center: np.ndarray,
-                          box: np.ndarray) -> np.ndarray:
+# Could be used in generator.py
+# I will do it later. For now, remap_positions_array is unused.
+# I will keep this commented out. Use inline arithmetic as currently done.
+
+#def remap_positions_array(pos: np.ndarray, qm_center: np.ndarray,
+#                          box: np.ndarray) -> np.ndarray:
+#    """
+#    Vectorised remap of an (N, 3) position array to minimum image.
+#    """
+#    lx, ly, lz = box[0], box[1], box[2]
+#    out = pos.copy()
+#    out[:, 0] -= np.floor((pos[:, 0] - qm_center[0]) / lx + 0.5) * lx
+#    out[:, 1] -= np.floor((pos[:, 1] - qm_center[1]) / ly + 0.5) * ly
+#    out[:, 2] -= np.floor((pos[:, 2] - qm_center[2]) / lz + 0.5) * lz
+#    return out
+
+def remap_positions_by_compound(mm_ag, orig_pos: np.ndarray,
+                                 qm_center: np.ndarray,
+                                 box: np.ndarray,
+                                 compound: str = 'residue') -> np.ndarray:
     """
-    Vectorised remap of an (N, 3) position array to minimum image.
-    """
-    lx, ly, lz = box[0], box[1], box[2]
-    out = pos.copy()
-    out[:, 0] -= np.floor((pos[:, 0] - qm_center[0]) / lx + 0.5) * lx
-    out[:, 1] -= np.floor((pos[:, 1] - qm_center[1]) / ly + 0.5) * ly
-    out[:, 2] -= np.floor((pos[:, 2] - qm_center[2]) / lz + 0.5) * lz
-    return out
+    Remap MM atom positions to minimum image relative to QM centroid.
 
+    The QM codes are not PBC-aware. They see point charges in plain Cartesian space. 
+    This remap ensures each charge appears at the correct minimum-image position relative to QM, 
+    while keeping bonded groups intact.
 
-def remap_positions_by_residue(mm_ag, orig_pos: np.ndarray,
-                                qm_center: np.ndarray,
-                                box: np.ndarray) -> np.ndarray:
-    """
-    Remap MM atom positions to minimum image, preserving residue
-    internal geometry.  Two-step process per residue:
+    For compound='residue' or 'fragment', two-step process:
+      1. Unwrap all atoms to be near the reference atom.
+      2. Shift the whole fragment/residue to minimum image of QM centroid.
 
-    1. **Unwrap**: remap every atom to minimum image relative to the
-       residue's reference atom (first atom).  This reassembles
-       residues that straddle the periodic boundary.
-    2. **Shift**: remap the reference atom to minimum image relative
-       to the QM centroid, and apply the same displacement to every
-       atom in the residue.
-
-    Both steps use standard floor-based minimum image arithmetic,
-    but step 1 keeps the residue whole and step 2 places it near QM.
+    For compound='atom', each atom is independently wrapped; GROMACS style
+    Likely to show stretched bonds across periodic boundaries).
 
     Parameters
     ----------
-    mm_ag      : MDAnalysis AtomGroup of MM atoms within cutoff
-    orig_pos   : (N, 3) original positions of mm_ag atoms
-    qm_center  : (3,) QM centroid
-    box        : (6,) box dimensions
+    mm_ag     : MDAnalysis AtomGroup of MM atoms within cutoff
+    orig_pos  : (N, 3) original positions of mm_ag atoms
+    qm_center : (3,) QM centroid
+    box       : (6,) box dimensions (orthorhombic; only [0:3] used)
+    compound  : 'residue'  - group by PSF residue (default, fast)
+                'fragment' - group by covalent connectivity 
+                             use when ligands/lipids/LPSs contains multiple residues)
+                'atom'     - atoms-based. No grouping 
     """
     lx, ly, lz = box[0], box[1], box[2]
-    new_pos = orig_pos.copy()
 
-    # Map universe atom index → position array row
+    # Per-atom remap 
+    if compound == 'atom':
+        out = orig_pos.copy()
+        out[:, 0] -= np.floor((orig_pos[:, 0] - qm_center[0]) / lx + 0.5) * lx
+        out[:, 1] -= np.floor((orig_pos[:, 1] - qm_center[1]) / ly + 0.5) * ly
+        out[:, 2] -= np.floor((orig_pos[:, 2] - qm_center[2]) / lz + 0.5) * lz
+        return out
+
+    # Compound-aware remap
+    if compound == 'residue':
+        groups = mm_ag.residues
+    elif compound == 'fragment':
+        groups = mm_ag.fragments
+    else:
+        raise ValueError(
+            f"compound must be 'residue', 'fragment', or 'atom', "
+            f"got '{compound}'"
+        )
+
+    new_pos = orig_pos.copy()
     idx_to_row = {idx: i for i, idx in enumerate(mm_ag.indices)}
 
-    for res in mm_ag.residues:
-        rows = [idx_to_row[a.index] for a in res.atoms
+    for grp in groups:
+        rows = [idx_to_row[a.index] for a in grp.atoms
                 if a.index in idx_to_row]
         if not rows:
             continue
@@ -84,13 +111,12 @@ def remap_positions_by_residue(mm_ag, orig_pos: np.ndarray,
             new_pos[r, 1] -= np.floor((new_pos[r, 1] - ref_pos[1]) / ly + 0.5) * ly
             new_pos[r, 2] -= np.floor((new_pos[r, 2] - ref_pos[2]) / lz + 0.5) * lz
 
-        # Step 2: shift the whole residue to minimum image of QM center
+        # Step 2: shift the whole unit to minimum image of QM center
         shift = np.array([
             -np.floor((ref_pos[0] - qm_center[0]) / lx + 0.5) * lx,
             -np.floor((ref_pos[1] - qm_center[1]) / ly + 0.5) * ly,
             -np.floor((ref_pos[2] - qm_center[2]) / lz + 0.5) * lz,
         ])
-
         for r in rows:
             new_pos[r] += shift
 

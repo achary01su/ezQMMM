@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ezqmmm.geometry import remap_positions_by_residue
+from ezqmmm.geometry import remap_positions_by_compound
 from ezqmmm.models import ChargeMod, SwitchRecord
 
 # ----------------------------------------------------
@@ -110,7 +110,8 @@ def write_psi4(fname, coords, charges, method, basis,
 # ------------------------------------------------------------------
 
 def write_structure(universe, frame: int, qm_atoms, mm_ag, base: Path,
-                    qm_center: np.ndarray, box: np.ndarray):
+                    qm_center: np.ndarray, box: np.ndarray,
+                    pbc_compound: str = 'residue'):
     """
     Write a full-system PDB for this frame.
     MM atoms are temporarily remapped to minimum image positions
@@ -125,8 +126,9 @@ def write_structure(universe, frame: int, qm_atoms, mm_ag, base: Path,
     all_atoms = universe.select_atoms("all")
 
     orig_mm_pos = mm_ag.positions.copy()
-    mm_ag.positions = remap_positions_by_residue(
-        mm_ag, orig_mm_pos, qm_center, box
+    mm_ag.positions = remap_positions_by_compound(
+        mm_ag, orig_mm_pos, qm_center, box,
+        compound=pbc_compound,
     )
 
     beta = np.zeros(len(all_atoms))
@@ -198,7 +200,7 @@ def write_switching_log(fh, all_switch: list[SwitchRecord],
     fh.write("=" * 72 + "\n")
     fh.write("ezQMMM 2.0  Switching-Function Charge Modifications\n")
     fh.write(f"  Switching zone  : {sw_label}\n")
-    fh.write("  Function        : quintic (NAMD-style)\n")
+    fh.write("  Function        : OpenMM-style\n")
     fh.write("  Distance metric : minimum distance to any QM atom "
              "(not center of mass)\n")
     if supercell_on:
