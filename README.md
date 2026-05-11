@@ -18,15 +18,6 @@ This installs the `ezqmmm` command and all dependencies (MDAnalysis, NumPy,
 PyYAML).  The `-e` flag means editable so that code changes could be applied
 without reinstalling.
 
-Alternatively, run the standalone script without installing it as a package.
-In that case, please make sure that the dependencies are installed already in 
-the system. If they are not installed, one can use `pip` to install them as follows.
-
-```bash
-pip install MDAnalysis numpy pyyaml
-python ezQMMM2.py config.yaml
-```
-
 ---
 
 ## Quick Start
@@ -39,14 +30,6 @@ ezqmmm --example
 ezqmmm config.yaml
 ```
 
-Or using the standalone script:
-(note that the standalone code will not be updated beyond 2.0.1 version) 
-
-```bash
-python ezQMMM2.py --example
-# Rename the config file to config.yaml, edit the file, and then run
-python ezQMMM2.py config.yaml
-```
 ---
 
 ## Configuration Reference
@@ -272,9 +255,10 @@ written to the input file.
 
 ### Switching Function
 
-A NAMD-style quintic switching function smoothly attenuates charges between
+A OpenMM-style switching function smoothly attenuates charges between
 `mm_switchdist` and `mm_cutoff`. Switching is **disabled by default** — set
 `mm_switchdist` explicitly to enable it.
+Source: https://docs.openmm.org/latest/userguide/theory/02_standard_forces.html
 
 $$S(r) = 1 - 10t^3 + 15t^4 - 6t^5, \qquad t = \frac{r - r_\text{sw}}{r_\text{cut} - r_\text{sw}}$$
 

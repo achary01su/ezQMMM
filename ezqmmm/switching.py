@@ -1,9 +1,11 @@
 """
-NAMD-style quintic switching function.
+OpenMM-style switching function.
 
 S(r) = 1 - 10t³ + 15t⁴ - 6t⁵,   t = (r - sw) / (cut - sw)
 S(r) = 1  for r ≤ sw
 S(r) = 0  for r ≥ cut
+
+source: https://docs.openmm.org/latest/userguide/theory/02_standard_forces.html
 
 Distance r = minimum distance from charge to any QM atom.
 """

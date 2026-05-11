@@ -20,7 +20,6 @@ References:
 
 import numpy as np
 
-from ezqmmm.geometry import remap_position
 from ezqmmm.models import ChargeMod
 
 
@@ -86,6 +85,7 @@ def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme,
             removed_atoms.add(mm1_idx)
             charge_mods.append({
                 'type': 'removed', 'atom': mm1_atom,
+                'position': mm1_atom.position.copy(),
                 'old_charge': mm1_charge, 'new_charge': 0.0,
                 'reason': 'MM1 removed (Z1)',
             })
@@ -94,6 +94,7 @@ def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme,
             removed_atoms.add(mm1_idx)
             charge_mods.append({
                 'type': 'removed', 'atom': mm1_atom,
+                'position': mm1_atom.position.copy(),
                 'old_charge': mm1_charge, 'new_charge': 0.0,
                 'reason': 'MM1 removed (Z2)',
             })
@@ -103,6 +104,7 @@ def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme,
                 removed_atoms.add(mm2_idx)
                 charge_mods.append({
                     'type': 'removed', 'atom': mm2_atom,
+                    'position': mm2_atom.position.copy(),
                     'old_charge': old_q, 'new_charge': 0.0,
                     'reason': 'MM2 removed (Z2)',
                 })
@@ -111,6 +113,7 @@ def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme,
             removed_atoms.add(mm1_idx)
             charge_mods.append({
                 'type': 'removed', 'atom': mm1_atom,
+                'position': mm1_atom.position.copy(),
                 'old_charge': mm1_charge, 'new_charge': 0.0,
                 'reason': 'MM1 removed (Z3)',
             })
@@ -121,6 +124,7 @@ def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme,
                 removed_atoms.add(mm2_idx)
                 charge_mods.append({
                     'type': 'removed', 'atom': mm2_atom,
+                    'position': mm2_atom.position.copy(),
                     'old_charge': old_q, 'new_charge': 0.0,
                     'reason': 'MM2 removed (Z3)',
                 })
@@ -137,6 +141,7 @@ def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme,
                     removed_atoms.add(mm3_idx)
                     charge_mods.append({
                         'type': 'removed', 'atom': mm3_atom,
+                        'position': mm3_atom.position.copy(),
                         'old_charge': old_q3, 'new_charge': 0.0,
                         'reason': 'MM3 removed (Z3)',
                     })
@@ -145,6 +150,7 @@ def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme,
             removed_atoms.add(mm1_idx)
             charge_mods.append({
                 'type': 'removed', 'atom': mm1_atom,
+                'position': mm1_atom.position.copy(),
                 'old_charge': mm1_charge, 'new_charge': 0.0,
                 'reason': 'MM1 removed (RCD)',
             })
@@ -164,6 +170,7 @@ def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme,
                     modified_charges[mm2_idx] -= mm1_charge / n
                     charge_mods.append({
                         'type': 'modified', 'atom': mm2_atom,
+                        'position': mm2_atom.position.copy(),
                         'old_charge': old_q,
                         'new_charge': modified_charges[mm2_idx],
                         'reason': 'MM2 adjusted (RCD)',
@@ -173,6 +180,7 @@ def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme,
             removed_atoms.add(mm1_idx)
             charge_mods.append({
                 'type': 'removed', 'atom': mm1_atom,
+                'position': mm1_atom.position.copy(),
                 'old_charge': mm1_charge, 'new_charge': 0.0,
                 'reason': 'MM1 removed (CS)',
             })
@@ -204,6 +212,7 @@ def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme,
                     modified_charges[mm2_idx] += split  
                     charge_mods.append({
                         'type': 'modified', 'atom': mm2_atom,
+                        'position': mm2_atom.position.copy(),
                         'old_charge': old_q,
                         'new_charge': modified_charges[mm2_idx],
                         'reason': 'MM2 shifted (CS)',
@@ -217,10 +226,14 @@ def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme,
     return charges, charge_mods
 
 
+## AA: simplified this function since all coordinated are already remapped to PBC aware.
 def build_charge_mods(raw_mods: list, frame: int,
-                      qm_center: np.ndarray, box: np.ndarray,
                       psf_charges: dict[int, float]) -> list[ChargeMod]:
-    """Convert raw boundary scheme dicts to typed ChargeMod records."""
+    """Convert raw boundary scheme dicts to typed ChargeMod records.
+
+    Positions are already in compound-aware (atom/residue/fragment) minimum-image coordinates,
+    captured in apply_boundary_scheme after the remap.
+    """
     out = []
     for d in raw_mods:
         if d['type'] == 'virtual':
@@ -230,8 +243,7 @@ def build_charge_mods(raw_mods: list, frame: int,
                 reason=d['reason'],
                 psf_charge=0.0,
                 applied_charge=d['charge'],
-                position=remap_position(
-                    np.array(d['position']), qm_center, box),
+                position=np.array(d['position']),
             ))
         else:
             atom = d['atom']
@@ -242,8 +254,7 @@ def build_charge_mods(raw_mods: list, frame: int,
                 reason=d['reason'],
                 psf_charge=psf_q,
                 applied_charge=d['new_charge'],
-                position=remap_position(
-                    atom.position.copy(), qm_center, box),
+                position=d['position'],
                 atom_index=atom.index,
                 segid=atom.segid,
                 resid=atom.resid,
