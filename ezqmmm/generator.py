@@ -692,6 +692,7 @@ class QMMMGenerator:
                 qm_charges_per_frame.append(r['qm_q'])
                 mm_charges_per_frame.append(r['mm_q'])
                 generated.append(r['fname'])
+            log_fh.flush()    # force write to disk. Python may buffer output otherwise
         else:
             # ---- SERIAL PATH (original code, unchanged) ----
             for i, frame in enumerate(frames, 1):
