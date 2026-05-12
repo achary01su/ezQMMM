@@ -105,6 +105,10 @@ def validate_config(config: dict, n_frames: int):
             f"got '{pbc_compound}'."
         )
 
+    # --- Parallelization ---
+    n_workers = config.get('n_workers', 1)
+    if not isinstance(n_workers, int) or n_workers < 1:
+        raise ValueError(f"n_workers must be a positive integer, got {n_workers}")
 
     # --- Frame range ---
     first = config.get('first_frame', 0)
@@ -195,6 +199,11 @@ supercell_axes: []
 # Write a PDB per frame (shared PSF written once).
 # Options: all, half, tenth, or any integer stride. null = disabled.
 pdb_stride: null
+
+# Parallel frame processing. Default 1 (serial).
+# Each worker loads its own copy of the trajectory (~500MB per worker).
+# Set to number of physical CPU cores for best performance.
+n_workers: 1
 
 qchem_keywords: |
   scf_convergence    8
