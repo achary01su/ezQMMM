@@ -55,7 +55,7 @@ def write_qchem(fname, coords, charges, method, basis,
         f.write(f"   method               {method}\n")
         f.write(f"   basis                {basis}\n")
         if charges:
-            f.write("   qm_mm                true\n")
+            f.write("!   qm_mm                true\n")
         for line in keywords.strip().split('\n'):
             if line.strip():
                 f.write(f"   {line.strip()}\n")
