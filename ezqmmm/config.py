@@ -99,9 +99,9 @@ def validate_config(config: dict, n_frames: int):
 
     # --- PBC compound grouping ---
     pbc_compound = config.get('pbc_compound', 'residue')
-    if pbc_compound not in ('residue', 'fragment', 'atom'):
+    if pbc_compound not in ('residue', 'fragment', 'atom', 'NONE'):
         raise ValueError(
-            f"pbc_compound must be 'residue', 'fragment', or 'atom', "
+            f"pbc_compound must be 'residue', 'fragment', 'atom', or 'NONE' "
             f"got '{pbc_compound}'."
         )
 
@@ -170,6 +170,7 @@ cs_bond_fraction: 0.06
 # residue  : group by residue (default)
 # fragment : group by covalent connectivity 
 # atom     : per-atom minimum image 
+# NONE     : No remapping of MM atoms
 pbc_compound: residue
 
 
