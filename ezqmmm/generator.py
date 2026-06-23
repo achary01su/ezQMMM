@@ -35,7 +35,6 @@ from ezqmmm import __version__
 
 import time
 import multiprocessing as mp
-from functools import partial
 
 # --- Parallel worker state (module-level, multiprocessing) ---
 _worker_universe = None
@@ -497,11 +496,11 @@ class QMMMGenerator:
         charge = config.get('charge', 0)
         mult = config.get('multiplicity', 1)
         bscheme = config.get('boundary_scheme', 'RCD').upper()
-        #cs-scaling
+        # CS virtual-charge displacement relative to the MM1–MM2 bond length
         cs_bond_frac = config.get('cs_bond_fraction', 0.06) if bscheme == 'CS' else None
         pbc_compound = config.get('pbc_compound', 'residue') 
         
-        #Support parellel execution
+        # Number of independent frame workers
         n_workers = config.get('n_workers', 1)
 
 
@@ -537,7 +536,8 @@ class QMMMGenerator:
         qm_psf_charge = sum(self._psf_charges.get(a.index, 0.0) for a in qm_test)
         suggested = round(qm_psf_charge)
         print(f"  QM charge sum from force field: {qm_psf_charge:+.4f} -> suggested charge: {suggested}")
-        print(f"  Note: Double check your selection in case of non-interger values")
+        print(f"  Note: Double-check the QM selection when the force-field charge "
+                       "is not close to an integer. ")
 
         if suggested != charge:
             print(f"  WARNING: Config charge ({charge}) differs too much from force field sum ({suggested})")
@@ -556,7 +556,8 @@ class QMMMGenerator:
                       f"  ({qm_elem}-{mm_elem})")
                 if qm_elem in ('N', 'O', 'S') or mm_elem in ('N', 'O', 'S'):
                       print(f"    WARNING: Polar bond cut -- only C-C cuts are tested")
-                      print(f"    WARNING: The input will still be created. The user should be careful before using them")
+                      print(f"    WARNING: The input will still be created. "
+                                 "This QM-MM bond breaking should be benchmarked.")
         else:
             print(f"\n  Boundary bonds: none")
 
@@ -694,7 +695,8 @@ class QMMMGenerator:
                 generated.append(r['fname'])
             log_fh.flush()    # force write to disk. Python may buffer output otherwise
         else:
-            # ---- SERIAL PATH (original code, unchanged) ----
+            # Serial execution uses the same frame-processing functions
+            # as the multiprocessing workers.
             for i, frame in enumerate(frames, 1):
                 coords = self.extract_coordinates(qm_sel, frame)
 
