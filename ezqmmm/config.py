@@ -65,7 +65,7 @@ def validate_config(config: dict, n_frames: int):
         raise ValueError("'program' is required; supported values are orca and qchem")
 
     # --- Program ---
-    program = config['program'].lower()
+    program = str(config['program']).strip().lower()
     valid_programs = {'orca', 'qchem'}
     if program not in valid_programs:
         raise ValueError(
@@ -74,7 +74,7 @@ def validate_config(config: dict, n_frames: int):
         )
 
     # --- Boundary scheme ---
-    bscheme = config.get('boundary_scheme', 'RCD').upper()
+    bscheme = str(config.get('boundary_scheme', 'RCD')).strip().upper()
     valid_schemes = {'RCD', 'CS', 'Z1', 'Z2', 'Z3', 'NONE'}
     if bscheme not in valid_schemes:
         raise ValueError(
@@ -98,7 +98,7 @@ def validate_config(config: dict, n_frames: int):
         )
 
     # --- PBC compound grouping ---
-    pbc_compound = config.get('pbc_compound', 'residue')
+    pbc_compound = str(config.get('pbc_compound', 'residue')).strip().lower()
     if pbc_compound not in ('residue', 'fragment', 'atom', 'none'):
         raise ValueError(
             f"pbc_compound must be 'residue', 'fragment', 'atom', or 'none' "
@@ -109,6 +109,21 @@ def validate_config(config: dict, n_frames: int):
     n_workers = config.get('n_workers', 1)
     if not isinstance(n_workers, int) or n_workers < 1:
         raise ValueError(f"n_workers must be a positive integer, got {n_workers}")
+
+    if isinstance(n_workers, bool):
+        raise ValueError(
+            f"n_workers must be a positive integer, got {n_workers!r}"
+        )
+
+    if not isinstance(n_workers, int):
+        raise ValueError(
+            f"n_workers must be a positive integer, got {n_workers!r}"
+        )
+
+    if n_workers < 1:
+        raise ValueError(
+            f"n_workers must be at least 1, got {n_workers}"
+        )
 
     # --- Frame range ---
     first = config.get('first_frame', 0)
