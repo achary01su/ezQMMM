@@ -495,18 +495,20 @@ class QMMMGenerator:
         basis = config.get('basis', '6-31G*')
         charge = config.get('charge', 0)
         mult = config.get('multiplicity', 1)
-        bscheme = config.get('boundary_scheme', 'RCD').upper()
+        bscheme = str(config.get('boundary_scheme', 'RCD')).strip().upper()
         # CS virtual-charge displacement relative to the MM1–MM2 bond length
         cs_bond_frac = config.get('cs_bond_fraction', 0.06) if bscheme == 'CS' else None
         pbc_compound = config.get('pbc_compound', 'residue') 
+
+        pbc_compound = str(config.get("pbc_compound", "residue")).strip().lower()
         
         # Number of independent frame workers
         n_workers = config.get('n_workers', 1)
 
 
         output_dir = Path(config.get('output_dir', '.'))
-        prefix = config.get('output_prefix', 'qmmm')
-        program = config['program'].lower()
+        prefix = str(config.get('output_prefix', 'qmmm')).strip()
+        program = str(config['program']).strip().lower() 
 
         keywords = config.get(f'{program}_keywords', '') or ''
         custom_blocks = config.get(f'{program}_blocks', '') or ''
