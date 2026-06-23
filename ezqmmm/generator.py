@@ -34,7 +34,252 @@ from ezqmmm import __version__
 
 
 import time
+import multiprocessing as mp
 
+# --- Parallel worker state (module-level, multiprocessing) ---
+_worker_universe = None
+_worker_psf_charges = None
+
+def _init_worker(psf_file, dcd_file):
+    """Called once per worker process. Loads its own Universe."""
+    global _worker_universe, _worker_psf_charges
+    warnings.filterwarnings("ignore", category=DeprecationWarning,
+                            module="MDAnalysis")
+    _worker_universe = mda.Universe(psf_file, dcd_file)
+    _worker_psf_charges = {
+        atom.index: float(atom.charge)
+        for atom in _worker_universe.atoms
+    }
+    try:
+        _ = _worker_universe.atoms.tempfactors
+    except AttributeError:
+        _worker_universe.add_TopologyAttr(
+            'tempfactors', np.zeros(len(_worker_universe.atoms))
+        )
+
+def _process_frame(args):
+    """
+    Process a single frame in a worker process.
+    Writes QM input file (and optionally PDB) directly.
+    Returns small metadata dict — no large arrays cross the process boundary.
+    """
+    (frame, qm_sel, mm_cutoff, bscheme, mm_switchdist, expand,
+     cs_bond_frac, pbc_compound, target_mm_charge, neutralize_mm,
+     neutral_frac, method, basis, charge, mult, program,
+     keywords, custom_blocks, output_dir, prefix, pdb_stride,
+     frame_index) = args
+
+    u = _worker_universe
+    psf_charges = _worker_psf_charges
+
+    # --- Extract QM coordinates ---
+    u.trajectory[frame]
+    qm_atoms = u.select_atoms(qm_sel)
+    coords = [
+        (get_element_from_mass(m), p[0], p[1], p[2])
+        for m, p in zip(qm_atoms.masses, qm_atoms.positions)
+    ]
+    for qm_idx, mm_idx in find_boundary_bonds(qm_atoms):
+        try:
+            lp = place_link_atom(u, qm_idx, mm_idx, frame)
+            coords.append(('H', lp[0], lp[1], lp[2]))
+        except ValueError:
+            pass
+
+    # --- Extract point charges ---
+    # (This replicates extract_point_charges but uses the worker's universe)
+    qm_idx_set = set(qm_atoms.indices)
+    all_atoms = u.select_atoms("all")
+    mm_atoms = [a for a in all_atoms if a.index not in qm_idx_set]
+    qm_pos = qm_atoms.positions
+    box = u.dimensions
+
+    if not mm_atoms:
+        return {
+            'frame': frame, 'fname': None,
+            'n_coords': len(coords), 'n_charges': 0,
+            'qm_q': 0.0, 'mm_q': 0.0,
+            'n_mods': 0, 'n_switch': 0, 'n_images': 0,
+            'mods': [], 'switch_recs': [],
+        }
+
+    mm_positions = np.array([a.position for a in mm_atoms])
+    dist_matrix = distances.distance_array(qm_pos, mm_positions, box=box)
+    min_distances = dist_matrix.min(axis=0)
+
+    residues_in = set()
+    for i, atom in enumerate(mm_atoms):
+        if min_distances[i] <= mm_cutoff:
+            residues_in.add((atom.segid, atom.resid))
+
+    mm_cut = [a for a in mm_atoms if (a.segid, a.resid) in residues_in]
+    mm_ag = u.atoms[np.array([a.index for a in mm_cut])]
+
+    boundary_bonds = find_boundary_bonds(qm_atoms)
+    qm_center = qm_pos.mean(axis=0)
+
+    # Remap
+    orig_positions = mm_ag.positions.copy()
+    mm_ag.positions = remap_positions_by_compound(
+        mm_ag, orig_positions, qm_center, box,
+        compound=pbc_compound,
+    )
+
+    try:
+        if not boundary_bonds or bscheme == 'NONE':
+            primary_charges = [(a.charge, *a.position) for a in mm_cut]
+            raw_mods = []
+        else:
+            primary_charges, raw_mods = apply_boundary_scheme(
+                u, mm_cut, boundary_bonds, bscheme,
+                cs_bond_fraction=cs_bond_frac,
+            )
+
+        # Tile periodic images
+        image_info = {}
+        if any(expand):
+            image_charges, shells, n_cand = tile_images(
+                primary_charges, qm_pos, mm_cutoff, box, expand
+            )
+            image_info = {
+                'nx': shells[0], 'ny': shells[1], 'nz': shells[2],
+                'n_images': len(image_charges), 'n_candidates': n_cand,
+            }
+            all_charges = primary_charges + image_charges
+        else:
+            all_charges = primary_charges
+
+        # Switching
+        switch_recs = []
+        if mm_switchdist is not None:
+            all_charges, switch_recs = apply_switching(
+                all_charges, qm_pos, mm_switchdist, mm_cutoff,
+                box=None, frame=frame, n_primary=len(primary_charges),
+            )
+
+        # Neutralization
+        if neutralize_mm and all_charges:
+            total_q = sum(q for q, x, y, z in all_charges)
+            residual = total_q - target_mm_charge
+            if abs(residual) > 1e-6:
+                positions_arr = np.array([[x, y, z] for _, x, y, z in all_charges])
+                all_dists = distances.distance_array(
+                    qm_pos, positions_arr, box=None
+                ).min(axis=0)
+                sorted_idx = np.argsort(all_dists)[::-1]
+                qs_arr = np.array([q for q, x, y, z in all_charges])
+                nonzero = np.where(np.abs(qs_arr) > 1e-4)[0]
+                outer_pool = [i for i in sorted_idx if i in set(nonzero.tolist())]
+                n_outer = max(1, int(len(outer_pool) * neutral_frac))
+                outer_idx = set(outer_pool[:n_outer])
+                correction = -residual / n_outer
+                all_charges = [
+                    (q + correction, x, y, z) if i in outer_idx else (q, x, y, z)
+                    for i, (q, x, y, z) in enumerate(all_charges)
+                ]
+
+        # Build charge mods as plain dicts (picklable)
+        mods_dicts = []
+        for d in raw_mods:
+            if d['type'] == 'virtual':
+                mods_dicts.append({
+                    'frame': frame, 'mod_type': 'virtual',
+                    'reason': d['reason'], 'psf_charge': 0.0,
+                    'applied_charge': d['charge'],
+                    'position': list(d['position']),
+                })
+            else:
+                atom = d['atom']
+                psf_q = psf_charges.get(atom.index, d['old_charge'])
+                mods_dicts.append({
+                    'frame': frame, 'mod_type': d['type'],
+                    'reason': d['reason'], 'psf_charge': psf_q,
+                    'applied_charge': d['new_charge'],
+                    'position': list(d['position']),
+                    'atom_index': atom.index, 'segid': atom.segid,
+                    'resid': atom.resid, 'resname': atom.resname,
+                    'name': atom.name,
+                })
+
+        # Switch records as plain dicts
+        switch_dicts = []
+        for r in switch_recs:
+            switch_dicts.append({
+                'frame': r.frame, 'psf_charge': r.psf_charge,
+                'scaled_charge': r.scaled_charge, 'scale': r.scale,
+                'dist': r.dist, 'position': list(r.position),
+                'is_image': r.is_image,
+            })
+
+        # --- Write QM input file ---
+        writer_fn = {
+            'orca': ('_orca.inp', writers.write_orca),
+            'qchem': ('_qchem.in', writers.write_qchem),
+            'psi4': ('_psi4.dat', writers.write_psi4),
+        }
+        base = Path(output_dir) / f"{prefix}_frame{frame}"
+        suffix, write_fn = writer_fn[program]
+        fname = str(base) + suffix
+        write_fn(fname, coords, all_charges, method, basis,
+                 charge, mult, keywords, custom_blocks)
+
+        # --- Optionally write PDB ---
+        wrote_pdb = False
+        if pdb_stride and (frame_index % pdb_stride == 0 or frame_index == 1):
+            writers.write_structure(u, frame, qm_atoms, mm_ag,
+                                   base, qm_center, box, pbc_compound)
+            wrote_pdb = True
+
+        # --- Compute charge stats ---
+        qm_q = sum(psf_charges.get(a.index, 0.0) for a in qm_atoms)
+        mm_q = sum(q for q, x, y, z in all_charges)
+
+    finally:
+        mm_ag.positions = orig_positions
+
+    return {
+        'frame': frame,
+        'fname': fname,
+        'n_coords': len(coords),
+        'n_charges': len(all_charges),
+        'qm_q': qm_q,
+        'mm_q': mm_q,
+        'n_mods': len(mods_dicts),
+        'n_switch': len(switch_dicts),
+        'n_images': image_info.get('n_images', 0),
+        'image_info': image_info,
+        'mods': mods_dicts,
+        'switch_recs': switch_dicts,
+        'wrote_pdb': wrote_pdb,
+    }
+
+
+def _dicts_to_mods(mod_dicts):
+    """Reconstruct ChargeMod objects from plain dicts."""
+    return [
+        ChargeMod(
+            frame=d['frame'], mod_type=d['mod_type'], reason=d['reason'],
+            psf_charge=d['psf_charge'], applied_charge=d['applied_charge'],
+            position=np.array(d['position']),
+            atom_index=d.get('atom_index'), segid=d.get('segid', ''),
+            resid=d.get('resid', 0), resname=d.get('resname', ''),
+            name=d.get('name', ''),
+        )
+        for d in mod_dicts
+    ]
+
+
+def _dicts_to_switch(switch_dicts):
+    """Reconstruct SwitchRecord objects from plain dicts."""
+    return [
+        SwitchRecord(
+            frame=d['frame'], psf_charge=d['psf_charge'],
+            scaled_charge=d['scaled_charge'], scale=d['scale'],
+            dist=d['dist'], position=np.array(d['position']),
+            is_image=d['is_image'],
+        )
+        for d in switch_dicts
+    ]
 
 class QMMMGenerator:
     """Generate QM/MM input files from MD trajectories."""
@@ -251,9 +496,12 @@ class QMMMGenerator:
         charge = config.get('charge', 0)
         mult = config.get('multiplicity', 1)
         bscheme = config.get('boundary_scheme', 'RCD').upper()
-        #cs-scaling
+        # CS virtual-charge displacement relative to the MM1–MM2 bond length
         cs_bond_frac = config.get('cs_bond_fraction', 0.06) if bscheme == 'CS' else None
         pbc_compound = config.get('pbc_compound', 'residue') 
+        
+        # Number of independent frame workers
+        n_workers = config.get('n_workers', 1)
 
 
         output_dir = Path(config.get('output_dir', '.'))
@@ -288,7 +536,8 @@ class QMMMGenerator:
         qm_psf_charge = sum(self._psf_charges.get(a.index, 0.0) for a in qm_test)
         suggested = round(qm_psf_charge)
         print(f"  QM charge sum from force field: {qm_psf_charge:+.4f} -> suggested charge: {suggested}")
-        print(f"  Note: Double check your selection in case of non-interger values")
+        print(f"  Note: Double-check the QM selection when the force-field charge "
+                       "is not close to an integer. ")
 
         if suggested != charge:
             print(f"  WARNING: Config charge ({charge}) differs too much from force field sum ({suggested})")
@@ -307,7 +556,8 @@ class QMMMGenerator:
                       f"  ({qm_elem}-{mm_elem})")
                 if qm_elem in ('N', 'O', 'S') or mm_elem in ('N', 'O', 'S'):
                       print(f"    WARNING: Polar bond cut -- only C-C cuts are tested")
-                      print(f"    WARNING: The input will still be created. The user should be careful before using them")
+                      print(f"    WARNING: The input will still be created. "
+                                 "This QM-MM bond breaking should be benchmarked.")
         else:
             print(f"\n  Boundary bonds: none")
 
@@ -334,6 +584,11 @@ class QMMMGenerator:
             f"(virtual charges at MM2 +/- {cs_bond_frac:.3f} x MM1-MM2 bond length)")  
         log(f"  MM cutoff   : {mm_cutoff} Ang")
         log(f"  PBC compound: {pbc_compound}") 
+
+        #Support parellel execution
+        if n_workers > 1:
+            log(f"  Workers     : {n_workers}")
+
         if mm_switchdist is not None:
             log(f"  Switching   : {mm_switchdist} Ang -> {mm_cutoff} Ang")
         else:
@@ -382,57 +637,116 @@ class QMMMGenerator:
         
         # start the time
         loop_start = time.time()
-        for i, frame in enumerate(frames, 1):
-            coords = self.extract_coordinates(qm_sel, frame)
 
-            charges, mods, sw_recs, img_inf, mm_ag, qm_center, box = \
-                self.extract_point_charges(
-                    qm_sel, mm_cutoff, frame, bscheme, mm_switchdist, expand,
-                    cs_bond_frac, pbc_compound,
-                    target_mm_charge, neutralize_mm, neutral_frac
-                )
+        # Build argument tuples — same for serial and parallel
+        frame_args = [
+            (frame, qm_sel, mm_cutoff, bscheme, mm_switchdist, expand,
+             cs_bond_frac, pbc_compound, target_mm_charge, neutralize_mm,
+             neutral_frac, method, basis, charge, mult, program,
+             keywords, custom_blocks, str(output_dir), prefix,
+             pdb_stride, i)
+            for i, frame in enumerate(frames, 1)
+        ]
+        if n_workers > 1:
+            # ---- PARALLEL PATH ----
+            log(f"\nProcessing {len(frames)} frames with {n_workers} workers...\n")
 
-            all_mods.extend(mods)
-            all_switch.extend(sw_recs)
+            with mp.Pool(
+                processes=n_workers,
+                initializer=_init_worker,
+                initargs=(config['psf_file'], config['dcd_file']),
+            ) as pool:
+                results = []
+                for result in pool.imap_unordered(_process_frame, frame_args):
+                    results.append(result)
+                    n_done = len(results)
+                    elapsed = time.time() - loop_start
+                    fps = n_done / elapsed if elapsed > 0 else 0
+                    remaining = (len(frames) - n_done) / fps if fps > 0 else 0
+                    if remaining < 60:
+                        eta_str = f"{remaining:.0f}s"
+                    elif remaining < 3600:
+                        eta_str = f"{remaining/60:.1f}m"
+                    else:
+                        eta_str = f"{remaining/3600:.1f}h"
+                    spf = elapsed / n_done
+                    print(f"\r  Completed {n_done}/{len(frames)} frames "
+                          f"({spf:.1f} s/frame, ETA: {eta_str})  ",
+                          end='', flush=True)
+                print()  # newline after progress bar
 
-            # Compute charges
-            qm_atoms = self.universe.select_atoms(qm_sel)
-            qm_q = sum(self._psf_charges.get(a.index, 0.0) for a in qm_atoms)
-            mm_q = sum(q for q, x, y, z in charges)
-            qm_charges_per_frame.append(qm_q)
-            mm_charges_per_frame.append(mm_q)
+            # Sort by frame for deterministic log output
+            results.sort(key=lambda r: r['frame'])
 
-            img_str = (f"  {img_inf.get('n_images', 0):8d}"
-                       if supercell_on else "")
-            # calculate ETA 
-            if i == 1:
-                eta_str = "estimating..."
-            else:
-                elapsed = time.time() - loop_start
-                fps = i / elapsed
-                remaining = (len(frames) - i) / fps
-                if remaining < 60:
-                    eta_str = f"{remaining:.0f}s"
-                elif remaining < 3600:
-                    eta_str = f"{remaining/60:.1f}m"
+            # Print the per-frame table (same format as serial path)
+            for r in results:
+                img_str = (f"  {r['n_images']:8d}" if supercell_on else "")
+                log(f"  {r['frame']:5d}  {r['n_coords']:8d}  "
+                    f"{r['n_charges']:10d}  "
+                    f"{r['qm_q']:+10.4f}  {r['mm_q']:+11.4f}  "
+                    f"{r['n_mods']:4d}  {r['n_switch']:8d}{img_str}")
+
+            # Collect into accumulators
+            for r in results:
+                all_mods.extend(_dicts_to_mods(r['mods']))
+                all_switch.extend(_dicts_to_switch(r['switch_recs']))
+                qm_charges_per_frame.append(r['qm_q'])
+                mm_charges_per_frame.append(r['mm_q'])
+                generated.append(r['fname'])
+            log_fh.flush()    # force write to disk. Python may buffer output otherwise
+        else:
+            # Serial execution uses the same frame-processing functions
+            # as the multiprocessing workers.
+            for i, frame in enumerate(frames, 1):
+                coords = self.extract_coordinates(qm_sel, frame)
+
+                charges, mods, sw_recs, img_inf, mm_ag, qm_center, box = \
+                    self.extract_point_charges(
+                        qm_sel, mm_cutoff, frame, bscheme, mm_switchdist,
+                        expand, cs_bond_frac, pbc_compound,
+                        target_mm_charge, neutralize_mm, neutral_frac
+                    )
+
+                all_mods.extend(mods)
+                all_switch.extend(sw_recs)
+
+                qm_atoms = self.universe.select_atoms(qm_sel)
+                qm_q = sum(self._psf_charges.get(a.index, 0.0)
+                           for a in qm_atoms)
+                mm_q = sum(q for q, x, y, z in charges)
+                qm_charges_per_frame.append(qm_q)
+                mm_charges_per_frame.append(mm_q)
+
+                img_str = (f"  {img_inf.get('n_images', 0):8d}"
+                           if supercell_on else "")
+                if i == 1:
+                    eta_str = "estimating..."
                 else:
-                    eta_str = f"{remaining/3600:.1f}h"
-            log(f"  {frame:5d}  {len(coords):8d}  {len(charges):10d}  "
-                f"{qm_q:+10.4f}  {mm_q:+11.4f}  "
-                f"{len(mods):4d}  {len(sw_recs):8d}{img_str}"
-                f"  ETA: {eta_str}")
+                    elapsed = time.time() - loop_start
+                    fps = i / elapsed
+                    remaining = (len(frames) - i) / fps
+                    if remaining < 60:
+                        eta_str = f"{remaining:.0f}s"
+                    elif remaining < 3600:
+                        eta_str = f"{remaining/60:.1f}m"
+                    else:
+                        eta_str = f"{remaining/3600:.1f}h"
+                log(f"  {frame:5d}  {len(coords):8d}  {len(charges):10d}  "
+                    f"{qm_q:+10.4f}  {mm_q:+11.4f}  "
+                    f"{len(mods):4d}  {len(sw_recs):8d}{img_str}"
+                    f"  ETA: {eta_str}")
 
-            base = output_dir / f"{prefix}_frame{frame}"
-            suffix, write_fn = writer_fn[program]
-            fname = str(base) + suffix
-            write_fn(fname, coords, charges, method, basis,
-                     charge, mult, keywords, custom_blocks)
-            generated.append(fname)
+                base = output_dir / f"{prefix}_frame{frame}"
+                suffix, write_fn = writer_fn[program]
+                fname = str(base) + suffix
+                write_fn(fname, coords, charges, method, basis,
+                         charge, mult, keywords, custom_blocks)
+                generated.append(fname)
 
-            if pdb_stride and (i % pdb_stride == 0 or i == 1):
-                writers.write_structure(self.universe, frame, qm_atoms,
-                                        mm_ag, base, qm_center, box, 
-                                        pbc_compound)
+                if pdb_stride and (i % pdb_stride == 0 or i == 1):
+                    writers.write_structure(self.universe, frame, qm_atoms,
+                                           mm_ag, base, qm_center, box,
+                                           pbc_compound)
 
         # --- Charge summary ---
         log("\nCharge summary:")

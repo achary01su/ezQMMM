@@ -105,6 +105,10 @@ def validate_config(config: dict, n_frames: int):
             f"got '{pbc_compound}'."
         )
 
+    # --- Parallelization ---
+    n_workers = config.get('n_workers', 1)
+    if not isinstance(n_workers, int) or n_workers < 1:
+        raise ValueError(f"n_workers must be a positive integer, got {n_workers}")
 
     # --- Frame range ---
     first = config.get('first_frame', 0)
@@ -164,13 +168,13 @@ boundary_scheme: RCD
 # Default 0.06 matches NAMD
 cs_bond_fraction: 0.06
 
-# Periodic boundary remapping of MM atoms.
+# Periodic boundary remapping of MM point charges.
 # QM codes are not PBC-aware. They see point charges in plain Cartesian space. 
 # pbc_compound: <value>,  remaps charge location at the correct minimum-image position w.r.t. QM, while avoiding creating stretched bonds at boundary 
-# residue  : group by residue (default)
-# fragment : group by covalent connectivity 
-# atom     : per-atom minimum image 
-# none     : No remapping of MM atoms
+# residue  : preserve each PSF residue as a unit
+# fragment : preserve complete covalently connected fragments
+# atom     : independently remap each atom
+# none     : retain original trajectory coordinates without remapping
 pbc_compound: residue
 
 
@@ -196,6 +200,11 @@ supercell_axes: []
 # Write a PDB per frame (shared PSF written once).
 # Options: all, half, tenth, or any integer stride. null = disabled.
 pdb_stride: null
+
+# Parallel frame processing. Default 1 (serial).
+# Each worker loads its own copy of the trajectory (~500MB per worker).
+# Set to number of physical CPU cores for best performance.
+n_workers: 1
 
 qchem_keywords: |
   scf_convergence    8
