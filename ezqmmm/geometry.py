@@ -61,6 +61,8 @@ def remap_positions_by_compound(mm_ag, orig_pos: np.ndarray,
     For compound='atom', each atom is independently wrapped; GROMACS style
     Likely to show stretched bonds across periodic boundaries).
 
+    For compound='none', no remapping is performed, the original coordinates are returned.
+
     Parameters
     ----------
     mm_ag     : MDAnalysis AtomGroup of MM atoms within cutoff
@@ -71,9 +73,14 @@ def remap_positions_by_compound(mm_ag, orig_pos: np.ndarray,
                 'fragment' - group by covalent connectivity 
                              use when ligands/lipids/LPSs contains multiple residues)
                 'atom'     - atoms-based. No grouping 
+                'none'     - no remapping
     """
     lx, ly, lz = box[0], box[1], box[2]
 
+    # No remapping
+    if compound == 'none':
+        return orig_pos
+      
     # Per-atom remap 
     if compound == 'atom':
         out = orig_pos.copy()
@@ -89,7 +96,7 @@ def remap_positions_by_compound(mm_ag, orig_pos: np.ndarray,
         groups = mm_ag.fragments
     else:
         raise ValueError(
-            f"compound must be 'residue', 'fragment', or 'atom', "
+            f"compound must be 'residue', 'fragment', 'atom', or 'none' "
             f"got '{compound}'"
         )
 

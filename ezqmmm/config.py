@@ -99,9 +99,9 @@ def validate_config(config: dict, n_frames: int):
 
     # --- PBC compound grouping ---
     pbc_compound = config.get('pbc_compound', 'residue')
-    if pbc_compound not in ('residue', 'fragment', 'atom'):
+    if pbc_compound not in ('residue', 'fragment', 'atom', 'none'):
         raise ValueError(
-            f"pbc_compound must be 'residue', 'fragment', or 'atom', "
+            f"pbc_compound must be 'residue', 'fragment', 'atom', or 'none' "
             f"got '{pbc_compound}'."
         )
 
