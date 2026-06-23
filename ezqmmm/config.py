@@ -62,7 +62,7 @@ def validate_config(config: dict, n_frames: int):
     if 'qm_selection' not in config:
         raise ValueError("'qm_selection' is required in the config file")
     if 'program' not in config:
-        raise ValueError("'program' required (orca/qchem/psi4)")
+        raise ValueError("'program' is required; supported values are orca and qchem")
 
     # --- Program ---
     program = config['program'].lower()

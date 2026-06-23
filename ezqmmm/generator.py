@@ -215,7 +215,6 @@ def _process_frame(args):
         writer_fn = {
             'orca': ('_orca.inp', writers.write_orca),
             'qchem': ('_qchem.in', writers.write_qchem),
-            'psi4': ('_psi4.dat', writers.write_psi4),
         }
         base = Path(output_dir) / f"{prefix}_frame{frame}"
         suffix, write_fn = writer_fn[program]
@@ -628,7 +627,6 @@ class QMMMGenerator:
         writer_fn = {
             'orca': ('_orca.inp', writers.write_orca),
             'qchem': ('_qchem.in', writers.write_qchem),
-            'psi4': ('_psi4.dat', writers.write_psi4),
         }
 
         log(f"\n{'Frame':>7}  {'QM atoms':>8}  {'MM charges':>10}  "

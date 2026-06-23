@@ -69,6 +69,8 @@ def write_qchem(fname, coords, charges, method, basis,
             f.write("$end\n")
 
 
+# Experimental implementation retained for future validation.
+# It is intentionally not exposed through configuration or dispatch.
 def write_psi4(fname, coords, charges, method, basis,
                charge, mult, keywords, custom_blocks):
     """
