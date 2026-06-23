@@ -168,12 +168,13 @@ boundary_scheme: RCD
 # Default 0.06 matches NAMD
 cs_bond_fraction: 0.06
 
-# Periodic boundary remapping of MM atoms.
+# Periodic boundary remapping of MM point charges.
 # QM codes are not PBC-aware. They see point charges in plain Cartesian space. 
 # pbc_compound: <value>,  remaps charge location at the correct minimum-image position w.r.t. QM, while avoiding creating stretched bonds at boundary 
-# residue  : group by residue (default)
-# fragment : group by covalent connectivity 
-# atom     : per-atom minimum image 
+# residue  : preserve each PSF residue as a unit
+# fragment : preserve complete covalently connected fragments
+# atom     : independently remap each atom
+# none     : retain original trajectory coordinates without remapping
 pbc_compound: residue
 
 

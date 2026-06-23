@@ -131,6 +131,12 @@ Visulize different beta values in VMD to validate that QM/MM partitions and set 
 The `qm_selection` field uses MDAnalysis selection language, which is similar
 to but **not identical** to VMD's Tcl-based atom selection.
 
+**Important**: ezQMMM use `qm_selection` independently for each frame. 
+Please make sure to use fixed atom/residue selections whenever possible. 
+Distance-based selections such as `around` or `sphzone` may change the QM atom count  between frames.
+User must verify that the selected QM selection remains
+consistent.
+
 ### Common Selection Examples
 
 ```yaml
@@ -159,16 +165,6 @@ qm_selection: "resid 100 and not backbone"
 
 # Cofactor plus two specific coordinating residues (sidechain only)
 qm_selection: "resname FAD or (resid 45 112 and not backbone)"
-
-# Ligand plus all atoms within 3.5 Å of the ligand
-# Note: 'around' excludes the reference group itself, so 'resname LIG'
-# must be added back explicitly to include the ligand atoms too.
-qm_selection: "resname LIG or (around 3.5 resname LIG)"
-
-# Single metal ion plus its coordination shell
-# Note: 'sphzone' uses the COG of the reference and INCLUDES reference
-# atoms. For multiple metals use 'around' instead.
-qm_selection: "sphzone 2.5 resname ZN"
 ```
 
 ### Key Differences from VMD
@@ -180,17 +176,12 @@ qm_selection: "sphzone 2.5 resname ZN"
 | Segment ID | `segid PROA` | `segname PROA` |
 | Residue name | `resname HEM` | `resname HEM` |
 | Atom name | `name CA` | `name CA` |
-| Distance selection | `around 3.5 resname LIG` | `within 3.5 of resname LIG` |
-| Sphere zone (includes reference) | `sphzone 2.5 resname ZN` | `within 2.5 of resname ZN` |
 | Backbone atoms | `backbone` (N, CA, C, O only) | `backbone` (includes OT\* termini) |
 | By index (0-based) | `index 0 1 2` | `index 0 1 2` |
 | By serial (1-based) | *(not available)* | `serial 1 2 3` |
 | Chain | `segid` (CHARMM PSF) | `segname` (PSF) / `chain` (PDB) |
 
 **Key pitfalls:**
-- **`within` → `around`**: `around` excludes the reference group; VMD's `within X of` includes it. Use `resname LIG or (around X resname LIG)` to replicate VMD behaviour.
-- **`sphzone` includes reference atoms**: unlike `around`. For a single metal `sphzone 2.5 resname ZN` already contains the metal — no `or resname ZN` needed.
-- **`backbone` difference**: MDAnalysis backbone is strictly {N, CA, C, O}; VMD additionally includes OT\* terminal oxygens. `not backbone` in MDAnalysis excludes Cα — use `not name N C O` to keep it.
 - **Residue ranges**: VMD uses `resid 100 to 105`; MDAnalysis uses `resid 100:105`.
 
 ### Verifying Your Selection
@@ -328,13 +319,18 @@ outside the cutoff. Images only contribute when $L \lesssim 2\,r_\text{cut}$.
 ## Caveats and Limitations
 
 ### QM Region
-- **Must not straddle a periodic boundary.** The remapping formula uses the mean QM position as reference. Wrap the QM region before use.
-- **Element assignment is mass-based.** PSF files store CHARMM atom types, not element symbols. The lookup table covers H, D, C, N, O, Na, Mg, P, S, Cl, K, Ca, Fe, Cu, Zn. Unusual elements are assigned `X`. Check the `QM=` atom count in the console output. If you are in need for an new element that are not included in the list, please let us know. We can append that element.
+- **Must not straddle a periodic boundary.** The QM region and any covalent QM/MM boundary bonds must be whole in the written trajectory. ezQMMM does not reconstruct wrapped QM/MM boundary bonds before placing link atoms. If a QM-MM covalent bond crosses a periodic boundary, reimage/wrap the trajectory before running ezQMMM.
+
+- **Element assignment is mass-based.** PSF files store CHARMM atom types, not element symbols. The lookup table covers H, D, C, N, O, Na, Mg, P, S, Cl, K, Ca, Fe, Cu, Zn. Unusual elements are assigned `X`. Check the `QM=` atom count in the console output. If any QM atom is assigned element `X`, do not use the generated QM input without manually correcting the element assignment.
+
 - **Hydrogen mass repartition (HMR) is not supported.** If the MD simulation used HMR, mass-to-element conversion will fail because hydrogen masses are shifted above their standard values.
+
 
 ### MM Environment
 - **Whole-residue inclusion** means a single atom near the cutoff edge pulls in its entire residue. For large residues (lipids, polymers) this can significantly increase the MM region size.
+
 - **Charges are PSF partial charges.** No polarization is applied.
+
 - **MM charge neutralization is on by default.** Only the outermost charges
   (default: outermost 10%, controlled by `neutralization_shell_fraction`)
   absorb the correction — charges near the QM region are untouched, since
@@ -343,29 +339,30 @@ outside the cutoff. Images only contribute when $L \lesssim 2\,r_\text{cut}$.
   NAMD through the `qmPointChargeScheme` keyword (NAMD 2.14 User's Guide), which
   also adjusts only the most distant point charges. Set
   `neutralize_mm_charge: false` for benchmarking purposes.
+
 - **No MM geometry optimization** is performed. Input files are for single-point energy calculations only.
 
 ### Boundary
 - **Bonds must be in the PSF.** `_find_boundary_bonds` relies on `atom.bonds` from MDAnalysis. If the PSF lacks explicit bonds, no link atoms or charge corrections will be applied.
-- **Only C–C type cuts are well-tested.** Cutting across polar bonds (C–N, C–O) should be benchmarked.
+
+- **Only C–C type cuts are well-tested.** The link-atom model is primarily intended for standard C–C cuts. Polar cuts such as C–N, C–O, C–S may require specialized link atoms at a different distance. 
 
 
 ### Supercell
 - **Orthorhombic boxes only.** Triclinic boxes require lattice vector arithmetic and are not supported.
+
 - **PBC is always active for primary MM selection.** The minimum image convention is used regardless of `supercell_axes`. Image copies supplement the primary selection and do not replace it.
 
 ### PDB / PSF Output
-- **PDB remapping is per-residue.** MM atom positions in the PDB are shifted to minimum image near the QM centroid using a two-step process: 
-(i) all atoms in a residue are unwrapped to minimum image relative to the residue's first atom (reassembling residues that straddle the periodic boundary), then 
-(ii) the whole residue is shifted to minimum image relative to the QM centroid. This preserves internal bond lengths. Long bonds may still appear at the boundary between the MM cutoff region (beta=8) and the rest of the system (beta=0), since atoms outside the cutoff are not remapped. This does not affect the QM/MM input files.
-
-
 - **The PSF is written once.** Identical for every frame, so ezQMMM 2.0 copies it once as `<prefix>_struct.psf`. Each frame produces only a PDB.
+
 - **`pdb_stride` significantly slows down the run.** Writing a full-system PDB for large systems can take several seconds per frame. Use `pdb_stride: tenth` or a large integer for production; reserve `pdb_stride: all` for validation.
+
 - **tempfactors are not in PSF files.** MDAnalysis initializes them to zero. The startup note is informational only.
 
 ### Program-Specific
 - **ORCA**: point charges go in a separate `_charges.pc` file. Keep `.inp` and `.pc` in the same directory when running ORCA.
+
 - **Q-Chem**: charges appear inline in `$external_charges` in `x y z q` order (Angstrom).
 
 ---
