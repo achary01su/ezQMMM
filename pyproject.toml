@@ -70,3 +70,6 @@ testpaths = ["tests"]
 markers = [
     "slow: marks tests that load trajectories (deselect with '-m \"not slow\"')",
 ]
+filterwarnings = [
+    "ignore:DCDReader currently makes independent timesteps.*:DeprecationWarning:MDAnalysis.coordinates.DCD",
+]

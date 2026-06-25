@@ -342,6 +342,8 @@ outside the cutoff. Images only contribute when $L \lesssim 2\,r_\text{cut}$.
 
 - **No MM geometry optimization** is performed. Input files are for single-point energy calculations only.
 
+- **No repeated MM1 atom** should be used. QM regions in which the same MM boundary atom is directly bonded to multiple QM atoms are not currently supported. Users should inspect the reported QM–MM boundary bonds and avoid repeated MM1 atoms 
+
 ### Boundary
 - **Bonds must be in the PSF.** `_find_boundary_bonds` relies on `atom.bonds` from MDAnalysis. If the PSF lacks explicit bonds, no link atoms or charge corrections will be applied.
 

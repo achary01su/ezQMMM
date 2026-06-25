@@ -6,6 +6,8 @@ All scientific logic (boundary schemes, switching, geometry) and I/O
 MDAnalysis Universe and coordinates the per-frame pipeline.
 """
 
+import multiprocessing as mp
+import time
 import warnings
 from pathlib import Path
 from typing import Optional
@@ -14,7 +16,7 @@ import MDAnalysis as mda
 import numpy as np
 from MDAnalysis.analysis import distances
 
-from ezqmmm import writers
+from ezqmmm import __version__, writers
 from ezqmmm.boundary import (
     apply_boundary_scheme,
     build_charge_mods,
@@ -30,11 +32,6 @@ from ezqmmm.geometry import (
 )
 from ezqmmm.models import ChargeMod, SwitchRecord
 from ezqmmm.switching import apply_switching
-from ezqmmm import __version__
-
-
-import time
-import multiprocessing as mp
 
 # --- Parallel worker state (module-level, multiprocessing) ---
 _worker_universe = None
@@ -82,10 +79,13 @@ def _process_frame(args):
     for qm_idx, mm_idx in find_boundary_bonds(qm_atoms):
         try:
             lp = place_link_atom(u, qm_idx, mm_idx, frame)
-            coords.append(('H', lp[0], lp[1], lp[2]))
-        except ValueError:
-            pass
+        except ValueError as exc:
+            raise ValueError(
+                f"Frame {frame}: failed to place link atom for "
+                f"QM atom {qm_idx} and MM atom {mm_idx}: {exc}"
+            ) from exc
 
+        coords.append(('H', lp[0], lp[1], lp[2]))
     # --- Extract point charges ---
     # (This replicates extract_point_charges but uses the worker's universe)
     qm_idx_set = set(qm_atoms.indices)
@@ -324,9 +324,12 @@ class QMMMGenerator:
         for qm_idx, mm_idx in find_boundary_bonds(qm_atoms):
             try:
                 lp = place_link_atom(self.universe, qm_idx, mm_idx, frame)
-                coords.append(('H', lp[0], lp[1], lp[2]))
-            except ValueError:
-                pass
+            except ValueError as exc:
+                raise ValueError(
+                   f"Frame {frame}: failed to place link atom for "
+                   f"QM atoms {qm_idx} and MM atom {mm_idx}: {exc}"
+                ) from exc
+            coords.append(('H', lp[0], lp[1], lp[2]))
         return coords
 
     # ------------------------------------------------------------------
@@ -380,7 +383,7 @@ class QMMMGenerator:
 
         # Remap primary charges to minimum image
         qm_center = qm_pos.mean(axis=0)
-        lx, ly, lz = box[0], box[1], box[2]
+        #lx, ly, lz = box[0], box[1], box[2]
 
         # Remap MM positions to minimum image relative to QM.
         # Positions must be in the correct periodic image.
@@ -446,7 +449,7 @@ class QMMMGenerator:
                     all_charges = [
                         (q + correction, x, y, z) if i in outer_idx else (q, x, y, z)
                         for i, (q, x, y, z) in enumerate(all_charges)
-                    ]  
+                    ]
 
             # Sanity check: verify final MM charge matches target
             if neutralize and all_charges:
@@ -464,7 +467,7 @@ class QMMMGenerator:
             mods = build_charge_mods(raw_mods, frame, self._psf_charges)
             return all_charges, mods, switch_recs, image_info, mm_ag, qm_center, box
         finally:
-            mm_ag.positions = orig_positions 
+            mm_ag.positions = orig_positions
 
     # ------------------------------------------------------------------
     # Main generate loop
@@ -473,6 +476,13 @@ class QMMMGenerator:
     def generate(self, config: dict):
         """Run the full QM/MM input generation pipeline."""
         start_time = time.time()
+
+        # --- Validate ---
+        validate_config(config, len(self.universe.trajectory))
+        program = str(config['program']).strip().lower()
+        bscheme = str(config.get('boundary_scheme', 'RCD')).strip().upper()
+        pbc_compound = str(config.get('pbc_compound', 'residue')).strip().lower()
+
         # --- Parse config ---
         qm_sel = config['qm_selection']
         mm_cutoff = config.get('mm_cutoff', 40.0)
@@ -494,26 +504,19 @@ class QMMMGenerator:
         basis = config.get('basis', '6-31G*')
         charge = config.get('charge', 0)
         mult = config.get('multiplicity', 1)
-        bscheme = str(config.get('boundary_scheme', 'RCD')).strip().upper()
         # CS virtual-charge displacement relative to the MM1–MM2 bond length
         cs_bond_frac = config.get('cs_bond_fraction', 0.06) if bscheme == 'CS' else None
-        pbc_compound = config.get('pbc_compound', 'residue') 
 
-        pbc_compound = str(config.get("pbc_compound", "residue")).strip().lower()
-        
+
         # Number of independent frame workers
         n_workers = config.get('n_workers', 1)
 
 
         output_dir = Path(config.get('output_dir', '.'))
         prefix = str(config.get('output_prefix', 'qmmm')).strip()
-        program = str(config['program']).strip().lower() 
 
         keywords = config.get(f'{program}_keywords', '') or ''
         custom_blocks = config.get(f'{program}_blocks', '') or ''
-
-        # --- Validate ---
-        validate_config(config, len(self.universe.trajectory))
 
         # Dry-run QM selection
         self.universe.trajectory[first]
@@ -533,11 +536,11 @@ class QMMMGenerator:
 
         # Automatic charge suggestion from topology values
         # This will be only printed on console, not in the log file since the log file is not open yet
-        # The same raw sum of charges are also printed as summary for each frame 
+        # The same raw sum of charges are also printed as summary for each frame
         qm_psf_charge = sum(self._psf_charges.get(a.index, 0.0) for a in qm_test)
         suggested = round(qm_psf_charge)
         print(f"  QM charge sum from force field: {qm_psf_charge:+.4f} -> suggested charge: {suggested}")
-        print(f"  Note: Double-check the QM selection when the force-field charge "
+        print("  Note: Double-check the QM selection when the force-field charge "
                        "is not close to an integer. ")
 
         if suggested != charge:
@@ -556,11 +559,11 @@ class QMMMGenerator:
                       f" -- {mm_a.segid}:{mm_a.resname}{mm_a.resid}:{mm_a.name}"
                       f"  ({qm_elem}-{mm_elem})")
                 if qm_elem in ('N', 'O', 'S') or mm_elem in ('N', 'O', 'S'):
-                      print(f"    WARNING: Polar bond cut -- only C-C cuts are tested")
-                      print(f"    WARNING: The input will still be created. "
+                      print("    WARNING: Polar bond cut -- only C-C cuts are tested")
+                      print("    WARNING: The input will still be created. "
                                  "This QM-MM bond breaking should be benchmarked.")
         else:
-            print(f"\n  Boundary bonds: none")
+            print("\n  Boundary bonds: none")
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -580,11 +583,11 @@ class QMMMGenerator:
         log(f"  Program     : {program.upper()}")
         log(f"  QM          : {method}/{basis}  charge={charge}  mult={mult}")
         log(f"  Boundary    : {bscheme}")
-        if bscheme == 'CS':                                          
-            log(f"  CS bond frac: {cs_bond_frac:.3f}  "              
-            f"(virtual charges at MM2 +/- {cs_bond_frac:.3f} x MM1-MM2 bond length)")  
+        if bscheme == 'CS':
+            log(f"  CS bond frac: {cs_bond_frac:.3f}  "
+            f"(virtual charges at MM2 +/- {cs_bond_frac:.3f} x MM1-MM2 bond length)")
         log(f"  MM cutoff   : {mm_cutoff} Ang")
-        log(f"  PBC compound: {pbc_compound}") 
+        log(f"  PBC compound: {pbc_compound}")
 
         #Support parellel execution
         if n_workers > 1:
@@ -634,7 +637,7 @@ class QMMMGenerator:
             f"{'mods':>4}  {'switched':>8}"
             + ("  " + "images".rjust(8) if supercell_on else ""))
         log("-" * (76 + (10 if supercell_on else 0)))
-        
+
         # start the time
         loop_start = time.time()
 

@@ -91,10 +91,11 @@ def validate_config(config: dict, n_frames: int):
                 f"NAMD's default is 0.06."
         )
     elif 'cs_bond_fraction' in config:
-        # CS parameter set but boundary scheme is not CS: display warning msg 
+        # CS parameter set but boundary scheme is not CS: display warning msg
         import warnings
         warnings.warn(
-            f"cs_bond_fraction value will be ignored since boundary_scheme is: '{bscheme}'."
+            f"cs_bond_fraction value will be ignored since boundary_scheme is: '{bscheme}'.",
+            stacklevel=2,
         )
 
     # --- PBC compound grouping ---
@@ -106,23 +107,15 @@ def validate_config(config: dict, n_frames: int):
         )
 
     # --- Parallelization ---
-    n_workers = config.get('n_workers', 1)
-    if not isinstance(n_workers, int) or n_workers < 1:
-        raise ValueError(f"n_workers must be a positive integer, got {n_workers}")
+    n_workers = config.get("n_workers", 1)
 
-    if isinstance(n_workers, bool):
+    if (
+        isinstance(n_workers, bool)
+        or not isinstance(n_workers, int)
+        or n_workers < 1
+    ):
         raise ValueError(
             f"n_workers must be a positive integer, got {n_workers!r}"
-        )
-
-    if not isinstance(n_workers, int):
-        raise ValueError(
-            f"n_workers must be a positive integer, got {n_workers!r}"
-        )
-
-    if n_workers < 1:
-        raise ValueError(
-            f"n_workers must be at least 1, got {n_workers}"
         )
 
     # --- Frame range ---
@@ -170,7 +163,7 @@ psf_file: system.psf
 dcd_file: trajectory.dcd
 qm_selection: "resid 100 and not backbone"
 mm_cutoff: 40.0
-mm_switchdist: 35.0   
+mm_switchdist: 35.0
 first_frame: 0
 last_frame: 100
 stride: 10
@@ -184,8 +177,8 @@ boundary_scheme: RCD
 cs_bond_fraction: 0.06
 
 # Periodic boundary remapping of MM point charges.
-# QM codes are not PBC-aware. They see point charges in plain Cartesian space. 
-# pbc_compound: <value>,  remaps charge location at the correct minimum-image position w.r.t. QM, while avoiding creating stretched bonds at boundary 
+# QM codes are not PBC-aware. They see point charges in plain Cartesian space.
+# pbc_compound: <value>,  remaps charge location at the correct minimum-image position w.r.t. QM, while avoiding creating stretched bonds at boundary
 # residue  : preserve each PSF residue as a unit
 # fragment : preserve complete covalently connected fragments
 # atom     : independently remap each atom

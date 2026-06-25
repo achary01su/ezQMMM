@@ -17,7 +17,7 @@ def remap_position(pos: np.ndarray, qm_center: np.ndarray,
     Remap a single (3,) position to minimum image relative to *qm_center*.
 
     It must be consitent with inlined remap in generator.extract_point_charges
-    used for QM-input charge positions 
+    used for QM-input charge positions
     """
     lx, ly, lz = box[0], box[1], box[2]
     return np.array([
@@ -50,8 +50,8 @@ def remap_positions_by_compound(mm_ag, orig_pos: np.ndarray,
     """
     Remap MM atom positions to minimum image relative to QM centroid.
 
-    The QM codes are not PBC-aware. They see point charges in plain Cartesian space. 
-    This remap ensures each charge appears at the correct minimum-image position relative to QM, 
+    The QM codes are not PBC-aware. They see point charges in plain Cartesian space.
+    This remap ensures each charge appears at the correct minimum-image position relative to QM,
     while keeping bonded groups intact.
 
     For compound='residue' or 'fragment', two-step process:
@@ -70,9 +70,9 @@ def remap_positions_by_compound(mm_ag, orig_pos: np.ndarray,
     qm_center : (3,) QM centroid
     box       : (6,) box dimensions (orthorhombic; only [0:3] used)
     compound  : 'residue'  - group by PSF residue (default, fast)
-                'fragment' - group by covalent connectivity 
+                'fragment' - group by covalent connectivity
                              use when ligands/lipids/LPSs contains multiple residues)
-                'atom'     - atoms-based. No grouping 
+                'atom'     - atoms-based. No grouping
                 'none'     - no remapping
     """
     lx, ly, lz = box[0], box[1], box[2]
@@ -80,8 +80,8 @@ def remap_positions_by_compound(mm_ag, orig_pos: np.ndarray,
     # No remapping
     if compound == 'none':
         return orig_pos
-      
-    # Per-atom remap 
+
+    # Per-atom remap
     if compound == 'atom':
         out = orig_pos.copy()
         out[:, 0] -= np.floor((orig_pos[:, 0] - qm_center[0]) / lx + 0.5) * lx

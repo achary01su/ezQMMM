@@ -209,7 +209,7 @@ def apply_boundary_scheme(universe, mm_atoms, boundary_bonds, scheme,
                     mm2_atom = universe.atoms[mm2_idx]
                     old_q = mm2_atom.charge
                     # deposit q/n on MM2 (the charge shift)
-                    modified_charges[mm2_idx] += split  
+                    modified_charges[mm2_idx] += split
                     charge_mods.append({
                         'type': 'modified', 'atom': mm2_atom,
                         'position': mm2_atom.position.copy(),
